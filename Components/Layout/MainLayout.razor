@@ -1,19 +1,21 @@
 ﻿@inherits LayoutComponentBase
 
 <div class="page">
-    <div class="sidebar">
+    <aside class="sidebar">
         <NavMenu />
-    </div>
+    </aside>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://github.com/DimitrovViktor/Spendings-Checker" target="_blank">Download</a>
-            <a href="https://github.com/DimitrovViktor" target="_blank">Viktor</a>
-            <a href="https://github.com/ValeriStavrev" target="_blank">Valeri</a>
-        </div>
+    <main class="main-surface">
+        <header class="top-row px-4">
+            <a href="https://github.com/DimitrovViktor/Spendings-Checker" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a href="https://github.com/DimitrovViktor" target="_blank" rel="noopener noreferrer">Viktor</a>
+            <a href="https://github.com/ValeriStavrev" target="_blank" rel="noopener noreferrer">Valeri</a>
+        </header>
 
         <article class="content px-4">
-            @Body
+            <div class="content-surface">
+                @Body
+            </div>
         </article>
     </main>
 </div>
