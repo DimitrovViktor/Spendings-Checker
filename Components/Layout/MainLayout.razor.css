@@ -28,7 +28,7 @@
         position: absolute;
         inset: 0;
         pointer-events: none;
-        background-image: radial-gradient(900px 600px at 20% 10%, rgba(255,255,255,0.06), transparent 60%), linear-gradient(180deg, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.88)), url("https://images.unsplash.com/photo-1718100910413-07aad4f17745?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D");
+        background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.88)), url("https://images.unsplash.com/photo-1704654923902-8ad5ad984336?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D");
         background-size: cover;
         background-position: center;
         background-attachment: fixed;
@@ -49,7 +49,7 @@
     position: relative;
     flex: 1;
     overflow: hidden;
-    background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.20), rgba(0, 0, 0, 0.30)), url("https://images.unsplash.com/photo-1718100910413-07aad4f17745?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D");
+    background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.20), rgba(0, 0, 0, 0.30)), url("https://images.unsplash.com/photo-1704654923902-8ad5ad984336?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D");
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
