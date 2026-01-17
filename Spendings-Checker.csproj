@@ -9,4 +9,10 @@
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Content Include="Components\Pages\Home.razor.css" />
+    <Content Include="Components\Pages\Spendings.razor.css" />
+    <Content Include="Components\Pages\Subscriptions.razor.css" />
+  </ItemGroup>
+
 </Project>

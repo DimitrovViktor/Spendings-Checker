@@ -1,0 +1,73 @@
+﻿
+    .page-title {
+        margin-top: 0;
+        color: rgba(255,255,255,0.96);
+        letter-spacing: 0.2px;
+    }
+
+    .page-subtitle {
+        margin-top: 0.35rem;
+        color: rgba(255,255,255,0.78);
+    }
+
+    .upload-card {
+        margin-top: 1rem;
+        padding: 1rem;
+        border-radius: 16px;
+        background: rgba(0,0,0,0.22);
+        border: 1px solid rgba(255,255,255,0.10);
+        box-shadow: 0 18px 45px rgba(0,0,0,0.30);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+    }
+
+    .upload-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: center;
+    }
+
+    .file-button {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.06);
+        color: rgba(255,255,255,0.88);
+        border: 1px solid rgba(255,255,255,0.10);
+        cursor: pointer;
+        user-select: none;
+        transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+    }
+
+        .file-button:hover {
+            transform: translateY(-1px);
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.14);
+        }
+
+        .file-button:focus-visible {
+            outline: 2px solid rgba(255,255,255,0.22);
+            outline-offset: 3px;
+        }
+
+        .file-button input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+    .status {
+        margin-top: 0.85rem;
+        padding: 0.75rem 0.9rem;
+        border-radius: 14px;
+        background: rgba(0,0,0,0.25);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: rgba(255,255,255,0.86);
+        overflow-wrap: anywhere;
+    }
