@@ -1,6 +1,6 @@
 # Spendings-Checker
 
-C# application which checks the user's spendings and monthly subscriptions
+C# (.NET + Blazor) application which checks the user's spendings and monthly subscriptions
 
 ## TO-DO:
 
