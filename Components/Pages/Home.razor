@@ -2,20 +2,15 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject IWebHostEnvironment Env
 
-<PageTitle>Spending Checker</PageTitle>
+<h1>Upload CSV</h1>
+<p class="sub">Import transactions to analyze spendings and subscriptions</p>
 
-<h1 class="page-title">Spendings Checker</h1>
-<p class="page-subtitle">
-    Upload a bank CSV export to start detecting recurring payments, renewals, and price changes.
-</p>
-
-<div class="upload-card">
-    <div class="upload-row">
-        <label class="file-button" role="button" tabindex="0">
-            <span>Upload CSV</span>
-            <InputFile OnChange="OnCsvSelected" accept=".csv,text/csv" />
-        </label>
-    </div>
+<div class="card">
+    <label class="btn">
+        <svg viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M5 21h14" /></svg>
+        Upload CSV
+        <InputFile OnChange="OnCsvSelected" accept=".csv" />
+    </label>
 
     @if (!string.IsNullOrWhiteSpace(Status))
     {
@@ -24,126 +19,78 @@
 </div>
 
 @code {
-    private string? Status;
+    string? Status;
 
-    private async Task OnCsvSelected(InputFileChangeEventArgs e)
+    async Task OnCsvSelected(InputFileChangeEventArgs e)
     {
-        Status = null;
-
-        var file = e.File;
-        if (file is null)
+        try
         {
-            Status = "No file selected.";
-            return;
+            var f = e.File;
+            if (f == null) return;
+            var dir = Path.Combine(Env.ContentRootPath, "App_Data", "uploads");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, $"{DateTime.UtcNow:yyyyMMddHHmmss}_{f.Name}");
+            await using var r = f.OpenReadStream(10 * 1024 * 1024);
+            await using var w = File.Create(path);
+            await r.CopyToAsync(w);
+            Status = "File uploaded";
         }
-
-        var ext = Path.GetExtension(file.Name);
-        if (!string.Equals(ext, ".csv", StringComparison.OrdinalIgnoreCase))
+        catch (Exception ex)
         {
-            Status = "Please upload a .csv file.";
-            return;
+            Status = ex.Message;
         }
-
-        const long maxBytes = 10 * 1024 * 1024;
-        if (file.Size > maxBytes)
-        {
-            Status = "File is too large (max 10 MB).";
-            return;
-        }
-
-        var uploadsDir = Path.Combine(Env.ContentRootPath, "App_Data", "uploads");
-        Directory.CreateDirectory(uploadsDir);
-
-        var safeBaseName = Path.GetFileNameWithoutExtension(file.Name);
-        safeBaseName = string.Concat(safeBaseName.Where(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' or ' ')).Trim();
-        if (string.IsNullOrWhiteSpace(safeBaseName))
-            safeBaseName = "transactions";
-
-        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
-        var savedFileName = $"{safeBaseName}_{timestamp}.csv";
-        var savedPath = Path.Combine(uploadsDir, savedFileName);
-
-        await using var readStream = file.OpenReadStream(maxAllowedSize: maxBytes);
-        await using var writeStream = File.Create(savedPath);
-        await readStream.CopyToAsync(writeStream);
-
-        Status = $"Uploaded: {file.Name} → Saved as: {savedFileName}";
     }
 }
 
 <style>
-
-    .page-title {
-        margin-top: 0;
-        color: rgba(255,255,255,0.96);
-        letter-spacing: 0.2px;
+    h1 {
+        margin: 0
     }
 
-    .page-subtitle {
-        margin-top: 0.35rem;
-        color: rgba(255,255,255,0.78);
+    .sub {
+        color: #aaa;
+        margin: .3rem 0 1rem
     }
 
-    .upload-card {
-        margin-top: 1rem;
-        padding: 1rem;
+    .card {
+        padding: 1.25rem;
         border-radius: 16px;
-        background: rgba(0,0,0,0.22);
-        border: 1px solid rgba(255,255,255,0.10);
-        box-shadow: 0 18px 45px rgba(0,0,0,0.30);
-        backdrop-filter: blur(14px);
-        -webkit-backdrop-filter: blur(14px);
+        background: #111;
+        border: 1px solid rgba(255,255,255,.08)
     }
 
-    .upload-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        align-items: center;
-    }
-
-    .file-button {
-        position: relative;
+    .btn {
         display: inline-flex;
         align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        padding: 0.75rem 1rem;
+        gap: .6rem;
+        padding: .75rem 1rem;
         border-radius: 14px;
-        background: rgba(255,255,255,0.06);
-        color: rgba(255,255,255,0.88);
-        border: 1px solid rgba(255,255,255,0.10);
+        background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,.1);
         cursor: pointer;
-        user-select: none;
-        transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+        transition: background .2s ease,transform .2s ease
     }
 
-        .file-button:hover {
-            transform: translateY(-1px);
-            background: rgba(255,255,255,0.08);
-            border-color: rgba(255,255,255,0.14);
+        .btn:hover {
+            background: #222;
+            transform: translateY(-1px)
         }
 
-        .file-button:focus-visible {
-            outline: 2px solid rgba(255,255,255,0.22);
-            outline-offset: 3px;
+        .btn svg {
+            width: 18px;
+            height: 18px;
+            stroke: #fff;
+            fill: none;
+            stroke-width: 1.7
         }
 
-        .file-button input[type="file"] {
+        .btn input {
             position: absolute;
-            inset: 0;
-            opacity: 0;
-            cursor: pointer;
+            opacity: 0
         }
 
     .status {
-        margin-top: 0.85rem;
-        padding: 0.75rem 0.9rem;
-        border-radius: 14px;
-        background: rgba(0,0,0,0.25);
-        border: 1px solid rgba(255,255,255,0.08);
-        color: rgba(255,255,255,0.86);
-        overflow-wrap: anywhere;
+        margin-top: .75rem;
+        color: #ccc
     }
-
 </style>

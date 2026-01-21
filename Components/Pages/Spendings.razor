@@ -1,23 +1,176 @@
-﻿@page "/Spendings"
-@rendermode InteractiveServer
+﻿@page "/spendings"
 
-<PageTitle>Spendings</PageTitle>
+<h1>Spendings</h1>
+<p class="sub">All imported transactions</p>
 
-<h1 class="page-title">Spendings</h1>
+<div class="toolbar">
+    <button class="tool @(SortBy == "date" ? "active" : "")" @onclick="SortByDate">
+        <svg viewBox="0 0 24 24"><path d="M6 3v18M6 21l-3-3M6 21l3-3M18 3v18M18 3l3 3M18 3l-3 3" /></svg>
+        Date
+    </button>
 
-<p class ="page-subtitle">Spendings will appear here.</p>
+    <button class="tool @(SortBy == "company" ? "active" : "")" @onclick="SortByCompany">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7" /></svg>
+        Company
+    </button>
+
+    <button class="tool @(SortBy == "amount" ? "active" : "")" @onclick="SortByAmount">
+        <svg viewBox="0 0 24 24"><path d="M12 3v18M8 7h8M8 17h8" /></svg>
+        Amount
+    </button>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Company</th>
+                <th>Description</th>
+                <th class="r">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var t in Sorted)
+            {
+                <tr>
+                    <td class="mono">@t.Date:yyyy-MM-dd</td>
+                    <td><span class="pill">@t.Company</span></td>
+                    <td class="muted">@t.Description</td>
+                    <td class="r mono">@t.Amount.ToString("0.00")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    record Tx(DateTime Date, string Company, string Description, decimal Amount);
+
+    readonly List<Tx> Data = new()
+    {
+        new(DateTime.Today, "Netflix", "NETFLIX", -12.99m),
+        new(DateTime.Today.AddDays(-1), "Spotify", "SPOTIFY", -10.99m),
+        new(DateTime.Today.AddDays(-3), "Amazon", "AMAZON", -4.99m),
+        new(DateTime.Today.AddDays(-7), "Steam", "STEAM", -19.99m)
+    };
+
+    string SortBy = "date";
+    bool Asc = true;
+
+    IEnumerable<Tx> Sorted =>
+        SortBy switch
+        {
+            "company" => Asc ? Data.OrderBy(x => x.Company) : Data.OrderByDescending(x => x.Company),
+            "amount" => Asc ? Data.OrderBy(x => x.Amount) : Data.OrderByDescending(x => x.Amount),
+            _ => Asc ? Data.OrderBy(x => x.Date) : Data.OrderByDescending(x => x.Date)
+        };
+
+    void ToggleOrSet(string key)
+    {
+        if (SortBy == key) Asc = !Asc;
+        else { SortBy = key; Asc = true; }
+    }
+
+    void SortByDate() => ToggleOrSet("date");
+    void SortByCompany() => ToggleOrSet("company");
+    void SortByAmount() => ToggleOrSet("amount");
+}
 
 <style>
-
-    .page-title {
-        margin-top: 0;
-        color: rgba(255,255,255,0.96);
-        letter-spacing: 0.2px;
+    .sub {
+        color: #aaa;
+        margin: .3rem 0 1rem
     }
 
-    .page-subtitle {
-        margin-top: 0.35rem;
-        color: rgba(255,255,255,0.78);
+    .toolbar {
+        display: flex;
+        gap: .5rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap
     }
 
+    .tool {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        padding: .45rem .7rem;
+        border-radius: 12px;
+        background: #141414;
+        border: 1px solid rgba(255,255,255,.08);
+        color: #ccc;
+        cursor: pointer;
+        transition: background .2s ease,transform .2s ease,border .2s ease,color .2s ease
+    }
+
+        .tool svg {
+            width: 16px;
+            height: 16px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round
+        }
+
+        .tool:hover {
+            background: #1c1c1c;
+            transform: translateY(-1px);
+            color: #fff
+        }
+
+        .tool.active {
+            background: #1f1f1f;
+            border-color: rgba(255,255,255,.18);
+            color: #fff
+        }
+
+    .card {
+        background: #111;
+        border: 1px solid rgba(255,255,255,.08);
+        border-radius: 16px;
+        overflow: auto
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 720px
+    }
+
+    th, td {
+        padding: .8rem;
+        border-bottom: 1px solid rgba(255,255,255,.06)
+    }
+
+    th {
+        text-align: left;
+        background: #151515;
+        color: #bbb
+    }
+
+    tr:hover td {
+        background: #1a1a1a
+    }
+
+    .muted {
+        color: #999
+    }
+
+    .r {
+        text-align: right
+    }
+
+    .mono {
+        font-variant-numeric: tabular-nums;
+        font-family: ui-monospace,monospace
+    }
+
+    .pill {
+        display: inline-block;
+        padding: .15rem .55rem;
+        border-radius: 999px;
+        background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,.08)
+    }
 </style>

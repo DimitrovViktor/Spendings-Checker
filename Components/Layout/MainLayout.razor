@@ -1,27 +1,103 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="page">
+<div class="app">
     <aside class="sidebar">
         <NavMenu />
     </aside>
 
-    <main class="main-surface">
-        <header class="top-row px-4">
-            <a href="https://github.com/DimitrovViktor/Spendings-Checker" target="_blank" rel="noopener noreferrer">GitHub</a>
-            <a href="https://github.com/DimitrovViktor" target="_blank" rel="noopener noreferrer">Viktor</a>
-            <a href="https://github.com/ValeriStavrev" target="_blank" rel="noopener noreferrer">Valeri</a>
+    <main class="main">
+        <header class="topbar">
+            <a href="https://github.com/DimitrovViktor/Spendings-Checker" target="_blank">GitHub</a>
+            <a href="https://github.com/DimitrovViktor" target="_blank">Viktor</a>
+            <a href="https://github.com/ValeriStavrev" target="_blank">Valeri</a>
         </header>
 
-        <article class="content px-4">
-            <div class="content-surface">
+        <section class="content">
+            <div class="surface">
                 @Body
             </div>
-        </article>
+        </section>
     </main>
 </div>
 
-<div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
-</div>
+<style>
+    html, body {
+        height: 100%
+    }
+
+    body {
+        margin: 0;
+        background: #0b0b0b;
+        color: #eaeaea;
+        font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial
+    }
+
+    .app {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column
+    }
+
+    .sidebar {
+        background: #0f0f0f;
+        border-right: 1px solid rgba(255,255,255,.08)
+    }
+
+    .main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: #0b0b0b
+    }
+
+    .topbar {
+        height: 3.75rem;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 1rem;
+        padding: 0 1.5rem;
+        background: #111;
+        border-bottom: 1px solid rgba(255,255,255,.08)
+    }
+
+        .topbar a {
+            color: #ccc;
+            text-decoration: none;
+            padding: .35rem .7rem;
+            border-radius: 999px;
+            transition: background .2s ease,color .2s ease,transform .2s ease
+        }
+
+            .topbar a:hover {
+                background: #1c1c1c;
+                color: #fff;
+                transform: translateY(-1px)
+            }
+
+    .content {
+        padding: 1.5rem
+    }
+
+    .surface {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 1.5rem;
+        background: #111;
+        border-radius: 18px;
+        border: 1px solid rgba(255,255,255,.08)
+    }
+
+    @@media(min-width:641px) {
+        .app {
+            flex-direction: row
+        }
+
+        .sidebar {
+            width: 260px;
+            height: 100vh;
+            position: sticky;
+            top: 0
+        }
+    }
+</style>

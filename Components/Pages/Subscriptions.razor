@@ -1,25 +1,169 @@
-﻿@page "/Subscriptions"
-@attribute [StreamRendering]
+﻿@page "/subscriptions"
 
-<PageTitle>Subscriptions</PageTitle>
+<h1>Subscriptions</h1>
+<p class="sub">Detected recurring payments</p>
 
-<h1 class="page-title">Subscriptions</h1>
+<div class="grid">
+    <div class="card">
+        <div class="card-head">
+            <span>Recurring</span>
+            <span class="count">@Subs.Count</span>
+        </div>
 
-<p class="page-subtitle">Subscriptions will appear here.</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Company</th>
+                    <th>Cycle</th>
+                    <th class="r">Amount</th>
+                    <th>Last</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in Subs)
+                {
+                    <tr>
+                        <td><span class="pill">@s.Company</span></td>
+                        <td class="muted">@s.Cycle</td>
+                        <td class="r mono">@s.Amount.ToString("0.00")</td>
+                        <td class="mono">@s.Last:yyyy-MM-dd</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <span>Companies</span>
+        </div>
+
+        <ul class="companies">
+            @foreach (var c in Companies)
+            {
+                <li>@c</li>
+            }
+        </ul>
+    </div>
+</div>
+
+@code {
+    record Sub(string Company, string Cycle, decimal Amount, DateTime Last);
+
+    readonly List<Sub> Subs = new()
+    {
+        new("Netflix","Monthly",-12.99m,new DateTime(2025,1,10)),
+        new("Spotify","Monthly",-10.99m,new DateTime(2025,1,17)),
+        new("Amazon","Monthly",-4.99m,new DateTime(2025,1,5))
+    };
+
+    IEnumerable<string> Companies => Subs.Select(s => s.Company).Distinct();
+}
 
 <style>
-
-
-    .page-title {
-        margin-top: 0;
-        color: rgba(255,255,255,0.96);
-        letter-spacing: 0.2px;
+    .sub {
+        color: #aaa;
+        margin: .3rem 0 1rem
     }
 
-    .page-subtitle {
-        margin-top: 0.35rem;
-        color: rgba(255,255,255,0.78);
+    .grid {
+        display: grid;
+        gap: 1rem
     }
 
+    @@media(min-width:900px) {
+        .grid {
+            grid-template-columns: 1.6fr 1fr
+        }
+    }
 
+    .card {
+        background: #111;
+        border: 1px solid rgba(255,255,255,.08);
+        border-radius: 16px;
+        padding: 1rem;
+        transition: transform .2s ease
+    }
+
+        .card:hover {
+            transform: translateY(-1px)
+        }
+
+    .card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: .6rem;
+        color: #ddd
+    }
+
+    .count {
+        font-size: .85rem;
+        padding: .15rem .5rem;
+        border-radius: 999px;
+        background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,.1)
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 620px
+    }
+
+    th, td {
+        padding: .7rem;
+        border-bottom: 1px solid rgba(255,255,255,.06)
+    }
+
+    th {
+        text-align: left;
+        color: #bbb
+    }
+
+    tbody tr:hover td {
+        background: #1a1a1a
+    }
+
+    .muted {
+        color: #999
+    }
+
+    .r {
+        text-align: right
+    }
+
+    .mono {
+        font-variant-numeric: tabular-nums;
+        font-family: ui-monospace,monospace
+    }
+
+    .pill {
+        display: inline-block;
+        padding: .15rem .55rem;
+        border-radius: 999px;
+        background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,.08)
+    }
+
+    .companies {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: .4rem
+    }
+
+        .companies li {
+            padding: .55rem .7rem;
+            border-radius: 12px;
+            background: #151515;
+            border: 1px solid rgba(255,255,255,.08);
+            transition: background .2s ease,transform .2s ease
+        }
+
+            .companies li:hover {
+                background: #1c1c1c;
+                transform: translateY(-1px)
+            }
 </style>
