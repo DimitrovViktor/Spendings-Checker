@@ -129,7 +129,10 @@
         background: #111;
         border: 1px solid rgba(255,255,255,.08);
         border-radius: 16px;
-        overflow: auto
+        padding: 1rem;
+        transition: transform .2s ease;
+        max-height: 60vh;
+        overflow: auto;
     }
 
     table {
@@ -146,7 +149,7 @@
     th {
         text-align: left;
         background: #151515;
-        color: #bbb
+        color: #f3f3f3;
     }
 
     tr:hover td {
@@ -172,5 +175,9 @@
         border-radius: 999px;
         background: #1a1a1a;
         border: 1px solid rgba(255,255,255,.08)
+    }
+
+    td.mono, .pill, .r.mono {
+        color: #f3f3f3 !important;
     }
 </style>

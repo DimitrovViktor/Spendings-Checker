@@ -21,6 +21,10 @@
 </div>
 
 <style>
+    :root {
+        --bar-h: 3.75rem;
+    }
+
     html, body {
         height: 100%
     }
@@ -29,54 +33,70 @@
         margin: 0;
         background: #0b0b0b;
         color: #eaeaea;
-        font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial
+        font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial;
     }
 
     .app {
         min-height: 100vh;
         display: flex;
-        flex-direction: column
+        flex-direction: row;
+        align-items: stretch;
     }
 
     .sidebar {
         background: #0f0f0f;
-        border-right: 1px solid rgba(255,255,255,.08)
+        border-right: 1px solid rgba(255,255,255,.08);
+        width: clamp(16rem, 22vw, 20rem);
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        overflow: auto;
+        flex: 0 0 auto;
     }
 
     .main {
-        flex: 1;
+        flex: 1 1 auto;
+        min-width: 0;
         display: flex;
         flex-direction: column;
         background: #0b0b0b
     }
 
     .topbar {
-        height: 3.75rem;
+        height: var(--bar-h);
         display: flex;
         justify-content: flex-end;
         align-items: center;
         gap: 1rem;
         padding: 0 1.5rem;
         background: #111;
-        border-bottom: 1px solid rgba(255,255,255,.08)
+        border-bottom: 1px solid rgba(255,255,255,.08);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        flex: 0 0 auto;
+        flex-wrap: wrap;
     }
 
-        .topbar a {
-            color: #ccc;
-            text-decoration: none;
-            padding: .35rem .7rem;
-            border-radius: 999px;
-            transition: background .2s ease,color .2s ease,transform .2s ease
-        }
+    .topbar a {
+        color: #ccc;
+        text-decoration: none;
+        padding: .35rem .7rem;
+        border-radius: 999px;
+        transition: background .2s ease,color .2s ease,transform .2s ease;
+        white-space: nowrap;
+    }
 
-            .topbar a:hover {
-                background: #1c1c1c;
-                color: #fff;
-                transform: translateY(-1px)
-            }
+    .topbar a:hover {
+        background: #1c1c1c;
+        color: #fff;
+        transform: translateY(-1px)
+    }
 
     .content {
-        padding: 1.5rem
+        padding: 1.5rem;
+        flex: 1 1 auto;
+        min-height: 0;
     }
 
     .surface {
@@ -85,19 +105,27 @@
         padding: 1.5rem;
         background: #111;
         border-radius: 18px;
-        border: 1px solid rgba(255,255,255,.08)
+        border: 1px solid rgba(255,255,255,.08);
     }
 
-    @@media(min-width:641px) {
+    @@media (max-width: 60em) {
         .app {
-            flex-direction: row
+            flex-direction: column;
         }
 
         .sidebar {
-            width: 260px;
-            height: 100vh;
-            position: sticky;
-            top: 0
+            width: 100%;
+            height: auto;
+            max-height: 45vh;
+            position: relative;
+            top: auto;
+            border-right: none;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+        }
+
+        .topbar {
+            justify-content: center;
+            padding: 0 1rem;
         }
     }
 </style>

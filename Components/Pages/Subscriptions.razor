@@ -9,28 +9,29 @@
             <span>Recurring</span>
             <span class="count">@Subs.Count</span>
         </div>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>Company</th>
-                    <th>Cycle</th>
-                    <th class="r">Amount</th>
-                    <th>Last</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var s in Subs)
-                {
+        <div class="table-container">
+            <table>
+                <thead>
                     <tr>
-                        <td><span class="pill">@s.Company</span></td>
-                        <td class="muted">@s.Cycle</td>
-                        <td class="r mono">@s.Amount.ToString("0.00")</td>
-                        <td class="mono">@s.Last:yyyy-MM-dd</td>
+                        <th>Company</th>
+                        <th>Cycle</th>
+                        <th class="r">Amount</th>
+                        <th>Last</th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach (var s in Subs)
+                    {
+                        <tr>
+                            <td><span class="pill company">@s.Company</span></td>
+                            <td class="muted">@s.Cycle</td>
+                            <td class="r mono @(s.Amount < 0 ? "amount-negative" : "amount-positive")">@s.Amount.ToString("0.00")</td>
+                            <td class="mono date">@s.Last:yyyy-MM-dd</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <div class="card">
@@ -63,17 +64,17 @@
 <style>
     .sub {
         color: #aaa;
-        margin: .3rem 0 1rem
+        margin: .3rem 0 1rem;
     }
 
     .grid {
         display: grid;
-        gap: 1rem
+        gap: 1rem;
     }
 
     @@media(min-width:900px) {
         .grid {
-            grid-template-columns: 1.6fr 1fr
+            grid-template-columns: 1.6fr 1fr;
         }
     }
 
@@ -82,19 +83,21 @@
         border: 1px solid rgba(255,255,255,.08);
         border-radius: 16px;
         padding: 1rem;
-        transition: transform .2s ease
+        transition: transform .2s ease;
+        max-height: 60vh;
+        overflow: auto;
     }
 
-        .card:hover {
-            transform: translateY(-1px)
-        }
+    .card:hover {
+        transform: translateY(-1px);
+    }
 
     .card-head {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: .6rem;
-        color: #ddd
+        color: #ddd;
     }
 
     .count {
@@ -102,40 +105,47 @@
         padding: .15rem .5rem;
         border-radius: 999px;
         background: #1a1a1a;
-        border: 1px solid rgba(255,255,255,.1)
+        border: 1px solid rgba(255,255,255,.1);
+    }
+
+    .table-container {
+        width: 100%;
+        overflow-x: auto;
     }
 
     table {
         width: 100%;
         border-collapse: collapse;
-        min-width: 620px
+        min-width: 480px;
     }
 
     th, td {
         padding: .7rem;
-        border-bottom: 1px solid rgba(255,255,255,.06)
+        border-bottom: 1px solid rgba(255,255,255,.06);
     }
 
     th {
         text-align: left;
-        color: #bbb
+        color: #bbb;
     }
 
     tbody tr:hover td {
-        background: #1a1a1a
+        background: #1a1a1a;
     }
 
     .muted {
-        color: #999
+        color: #aaa;
     }
 
     .r {
-        text-align: right
+        text-align: right;
+        color: #f3f3f3;
     }
 
     .mono {
         font-variant-numeric: tabular-nums;
-        font-family: ui-monospace,monospace
+        font-family: ui-monospace,monospace;
+        color: #f3f3f3;
     }
 
     .pill {
@@ -143,7 +153,24 @@
         padding: .15rem .55rem;
         border-radius: 999px;
         background: #1a1a1a;
-        border: 1px solid rgba(255,255,255,.08)
+        border: 1px solid rgba(255,255,255,.08);
+        color: #f3f3f3;
+    }
+
+    .company {
+        color: #f3f3f3;
+    }
+
+    .date {
+        color: #f3f3f3;
+    }
+
+    .amount-negative {
+        color: #e05c5c !important;
+    }
+
+    .amount-positive {
+        color: #5ce07a !important;
     }
 
     .companies {
@@ -151,19 +178,26 @@
         padding: 0;
         margin: 0;
         display: grid;
-        gap: .4rem
+        gap: .4rem;
     }
 
-        .companies li {
-            padding: .55rem .7rem;
-            border-radius: 12px;
-            background: #151515;
-            border: 1px solid rgba(255,255,255,.08);
-            transition: background .2s ease,transform .2s ease
-        }
+    .companies li {
+        padding: .55rem .7rem;
+        border-radius: 12px;
+        background: #151515;
+        border: 1px solid rgba(255,255,255,.08);
+        transition: background .2s ease,transform .2s ease;
+        color: #f3f3f3;
+    }
 
-            .companies li:hover {
-                background: #1c1c1c;
-                transform: translateY(-1px)
-            }
+    .companies li:hover {
+        background: #1c1c1c;
+        transform: translateY(-1px);
+    }
+
+    .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
 </style>
