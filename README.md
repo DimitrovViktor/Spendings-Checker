@@ -2,6 +2,14 @@
 
 C# (.NET + Blazor) application which checks the user's spendings and monthly subscriptions and gives graphs, trends, and estimates of potential future purchases
 
+## Features
+
+### CSV Upload
+
+### Spendings Page
+
+### Subscriptions Page
+
 ## TO-DO:
 
 - CSV File Reading (date, money spent, company, etc.)
