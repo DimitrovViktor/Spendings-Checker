@@ -12,6 +12,7 @@ C# (.NET + Blazor) application which checks the user's spendings and monthly sub
 
 ## TO-DO:
 
+- CSV File Upload Preview - show selected file names before uploading
 - CSV File Reading - multiple file upload and read functionality (date, money spent, company, etc.)
 - Spendings page - table of all transactions from all CSV files
 - Subscriptions page - table of recurring transactions in CSV, table of companies, active/inactive subscription indicators
