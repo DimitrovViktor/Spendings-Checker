@@ -23,3 +23,5 @@ obj/
 
 node_modules/
 wwwroot/lib/
+
+App_Data/uploads/

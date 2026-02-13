@@ -1,4 +1,5 @@
 ﻿@page "/"
+@rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components.Forms
 @inject IWebHostEnvironment Env
 
@@ -6,11 +7,45 @@
 <p class="sub">Import transactions to analyze spendings and subscriptions</p>
 
 <div class="card">
-    <label class="btn">
+    <label class="btn" title="Select one or more .csv files">
         <svg viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M5 21h14" /></svg>
-        Upload CSV
-        <InputFile OnChange="OnCsvSelected" accept=".csv" />
+        Select CSV
+        <InputFile OnChange="OnFilesSelected" accept=".csv" multiple />
     </label>
+
+    @if (SelectedFiles.Count > 0)
+    {
+        <div class="preview">
+            <div class="preview-title">Selected files</div>
+
+            <ul class="file-list">
+                @foreach (var p in SelectedFiles)
+                {
+                    <li class="file-item">
+                        <span class="file-name" title="@p.Name">@p.Name</span>
+                        <span class="file-ext">@p.Extension</span>
+                    </li>
+                }
+            </ul>
+
+            @if (InvalidFiles.Count > 0)
+            {
+                <div class="status error">
+                    Only CSV files are allowed:
+                    <ul class="invalid-list">
+                        @foreach (var name in InvalidFiles)
+                        {
+                            <li>@name</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            <button class="btn primary" @onclick="UploadSelectedAsync" disabled="@(!CanUpload)">
+                Upload
+            </button>
+        </div>
+    }
 
     @if (!string.IsNullOrWhiteSpace(Status))
     {
@@ -18,22 +53,117 @@
     }
 </div>
 
+@if (UploadedFiles.Count > 0)
+{
+    <div class="card uploaded-section">
+        <div class="preview-title">Uploaded files</div>
+        <ul class="file-list">
+            @foreach (var file in UploadedFiles)
+            {
+                <li class="file-item">
+                    <span class="file-name" title="@file.Name">@file.Name</span>
+                    <button class="remove-btn" @onclick="() => RemoveUploadedFile(file)" title="Remove file">
+                        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    </button>
+                </li>
+            }
+        </ul>
+    </div>
+}
+
 @code {
     string? Status;
 
-    async Task OnCsvSelected(InputFileChangeEventArgs e)
+    readonly List<PickedFile> SelectedFiles = new();
+    readonly List<string> InvalidFiles = new();
+    readonly List<UploadedFile> UploadedFiles = new();
+
+    bool CanUpload => SelectedFiles.Count > 0 && InvalidFiles.Count == 0;
+
+    sealed record PickedFile(IBrowserFile File, string Name, string Extension);
+    sealed record UploadedFile(string Name, string FullPath);
+
+    protected override void OnInitialized()
+    {
+        LoadUploadedFiles();
+    }
+
+    void LoadUploadedFiles()
+    {
+        UploadedFiles.Clear();
+        var dir = Path.Combine(Env.ContentRootPath, "App_Data", "uploads");
+        if (!Directory.Exists(dir))
+            return;
+
+        foreach (var filePath in Directory.GetFiles(dir, "*.csv"))
+        {
+            var name = Path.GetFileName(filePath);
+            UploadedFiles.Add(new UploadedFile(name, filePath));
+        }
+    }
+
+    void OnFilesSelected(InputFileChangeEventArgs e)
+    {
+        Status = null;
+        SelectedFiles.Clear();
+        InvalidFiles.Clear();
+
+        foreach (var f in e.GetMultipleFiles())
+        {
+            if (!IsCsv(f))
+            {
+                InvalidFiles.Add(f.Name);
+                continue;
+            }
+
+            var ext = Path.GetExtension(f.Name);
+            SelectedFiles.Add(new PickedFile(f, f.Name, string.IsNullOrWhiteSpace(ext) ? ".csv" : ext));
+        }
+    }
+
+    static bool IsCsv(IBrowserFile f)
+        => string.Equals(Path.GetExtension(f.Name), ".csv", StringComparison.OrdinalIgnoreCase);
+
+    async Task UploadSelectedAsync()
+    {
+        if (!CanUpload)
+            return;
+
+        try
+        {
+            var dir = Path.Combine(Env.ContentRootPath, "App_Data", "uploads");
+            Directory.CreateDirectory(dir);
+
+            foreach (var picked in SelectedFiles)
+            {
+                var safeName = Path.GetFileName(picked.File.Name);
+                var path = Path.Combine(dir, $"{DateTime.UtcNow:yyyyMMddHHmmss}_{safeName}");
+
+                await using var r = picked.File.OpenReadStream(10 * 1024 * 1024);
+                await using var w = File.Create(path);
+                await r.CopyToAsync(w);
+            }
+
+            Status = $"Uploaded {SelectedFiles.Count} file(s).";
+            SelectedFiles.Clear();
+            LoadUploadedFiles();
+        }
+        catch (Exception ex)
+        {
+            Status = ex.Message;
+        }
+    }
+
+    void RemoveUploadedFile(UploadedFile file)
     {
         try
         {
-            var f = e.File;
-            if (f == null) return;
-            var dir = Path.Combine(Env.ContentRootPath, "App_Data", "uploads");
-            Directory.CreateDirectory(dir);
-            var path = Path.Combine(dir, $"{DateTime.UtcNow:yyyyMMddHHmmss}_{f.Name}");
-            await using var r = f.OpenReadStream(10 * 1024 * 1024);
-            await using var w = File.Create(path);
-            await r.CopyToAsync(w);
-            Status = "File uploaded";
+            if (File.Exists(file.FullPath))
+            {
+                File.Delete(file.FullPath);
+            }
+            UploadedFiles.Remove(file);
+            Status = $"Removed {file.Name}";
         }
         catch (Exception ex)
         {
@@ -43,20 +173,19 @@
 }
 
 <style>
-    h1 {
-        margin: 0
-    }
+    h1 { margin: 0 }
 
-    .sub {
-        color: #aaa;
-        margin: .3rem 0 1rem
-    }
+    .sub { color: #aaa; margin: .3rem 0 1rem }
 
     .card {
         padding: 1.25rem;
         border-radius: 16px;
         background: #111;
         border: 1px solid rgba(255,255,255,.08)
+    }
+
+    .uploaded-section {
+        margin-top: 1rem;
     }
 
     .btn {
@@ -68,30 +197,109 @@
         background: #1a1a1a;
         border: 1px solid rgba(255,255,255,.1);
         cursor: pointer;
-        transition: background .2s ease,transform .2s ease;
+        transition: background .2s ease, transform .2s ease;
+        color: #f3f3f3;
+        font-weight: 500;
+    }
+
+    .btn:hover {
+        background: #222;
+        color: #f3f3f3;
+        transform: translateY(-1px)
+    }
+
+    .btn svg {
+        width: 18px;
+        height: 18px;
+        stroke: #fff;
+        fill: none;
+        stroke-width: 1.7;
+    }
+
+    .btn input { position: absolute; opacity: 0 }
+
+    .btn.primary {
+        margin-top: .75rem;
+        border-color: rgba(255,255,255,.16);
+        background: #202020;
+    }
+
+    .btn.primary:disabled {
+        opacity: .45;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .btn.primary:hover { background: #2a2a2a; color: #f3f3f3; }
+
+    .preview {
+        margin-top: .85rem;
+        padding-top: .85rem;
+        border-top: 1px solid rgba(255,255,255,.08);
+    }
+
+    .preview-title { color: #ddd; margin-bottom: .5rem; font-size: .95rem; }
+
+    .file-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: .35rem;
+    }
+
+    .file-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        padding: .55rem .7rem;
+        border-radius: 12px;
+        background: #151515;
+        border: 1px solid rgba(255,255,255,.08);
         color: #f3f3f3;
     }
 
-        .btn:hover {
-            background: #222;
-            transform: translateY(-1px)
-        }
+    .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-        .btn svg {
-            width: 18px;
-            height: 18px;
-            stroke: #fff;
-            fill: none;
-            stroke-width: 1.7
-        }
-
-        .btn input {
-            position: absolute;
-            opacity: 0
-        }
-
-    .status {
-        margin-top: .75rem;
-        color: #ccc
+    .file-ext {
+        font-variant-numeric: tabular-nums;
+        font-family: ui-monospace, monospace;
+        color: #bbb;
+        border: 1px solid rgba(255,255,255,.1);
+        background: #1a1a1a;
+        padding: .1rem .45rem;
+        border-radius: 999px;
     }
+
+    .remove-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 8px;
+        padding: .35rem;
+        cursor: pointer;
+        transition: background .2s ease, border-color .2s ease;
+    }
+
+    .remove-btn:hover {
+        background: rgba(224, 92, 92, .15);
+        border-color: rgba(224, 92, 92, .4);
+    }
+
+    .remove-btn svg {
+        width: 14px;
+        height: 14px;
+        stroke: #e05c5c;
+        fill: none;
+        stroke-width: 2;
+    }
+
+    .status { margin-top: .75rem; color: #ccc }
+
+    .status.error { color: #eaa; margin-top: .6rem; }
+
+    .invalid-list { margin: .4rem 0 0 1.2rem; }
 </style>
