@@ -18,6 +18,8 @@ Transactions are taken from CSV files and listed along with total amounts of spe
 
 ## Subscriptions Page (in progress)
 
+## Projections Page (in progress)
+
 ## TO-DO:
 
 - Subscriptions page - table of recurring transactions in CSV, table of companies, active/inactive subscription indicators
