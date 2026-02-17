@@ -24,4 +24,3 @@ Transactions are taken from CSV files and listed along with total amounts of spe
 
 - Subscriptions page - table of recurring transactions in CSV, table of companies, active/inactive subscription indicators
 - Projections page - total estimated future spendings, estimated future subscription spendings
-- UI - tables, buttons, lists, graphs, trends
