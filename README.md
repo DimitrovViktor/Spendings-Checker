@@ -16,7 +16,7 @@ Transactions are taken from CSV files and listed along with total amounts of spe
 
 ![Spendings](https://github.com/user-attachments/assets/9236c69a-00d4-4aef-af8a-0e58e15b61ef)
 
-## Subscriptions Page (in progress)
+## Subscriptions Page
 
 ## Projections Page (in progress)
 
