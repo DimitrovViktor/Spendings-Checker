@@ -18,7 +18,7 @@ Transactions are taken from CSV files and listed along with total amounts of spe
 
 ## Subscriptions Page
 
-## Projections Page (in progress)
+## Projections Page
 
 ## TO-DO:
 
