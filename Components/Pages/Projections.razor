@@ -1,0 +1,1153 @@
+@page "/projections"
+@rendermode InteractiveServer
+@inject IWebHostEnvironment Env
+
+<h1>Projections</h1>
+<p class="sub">Predict future spendings based on your transaction history</p>
+
+@if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="error-banner">@ErrorMessage</div>
+}
+
+@if (AllTransactions.Count == 0)
+{
+    <div class="card empty">
+        <p>No transactions found.</p>
+        <p class="muted">Upload CSV files on the <a href="/">Home</a> page to generate projections.</p>
+    </div>
+}
+else
+{
+    <div class="card controls-card">
+        <div class="controls-row">
+            <div class="controls-left">
+                <span class="interval-label">Interval</span>
+                @foreach (var iv in Intervals)
+                {
+                    <button class="tool @(SelectedInterval == iv.Key ? "active" : "")"
+                            @onclick="() => SetInterval(iv.Key)">
+                        @iv.Value
+                    </button>
+                }
+            </div>
+            <div class="controls-right">
+                <span class="interval-label">Periods ahead</span>
+                <input type="number" min="1" max="@MaxPeriodsForInterval" @bind="PeriodsInput" class="periods-input" />
+                <span class="range-value">@IntervalLabel@(PeriodsInput != 1 ? "s" : "")</span>
+                <button class="tool calculate-btn" @onclick="Calculate">
+                    <svg viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z" /></svg>
+                    Calculate
+                </button>
+                @if (PeriodsInput > MaxPeriodsForInterval)
+                {
+                    <span class="input-warning">Max @MaxPeriodsForInterval @IntervalLabel@(MaxPeriodsForInterval != 1 ? "s" : "") (@MaxCapYears yr cap)</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="card chart-card">
+        <div class="card-head">
+            <span>Spending Projection</span>
+            <span class="pill projection-pill">@PeriodsAhead @IntervalLabel@(PeriodsAhead != 1 ? "s" : "") ahead</span>
+        </div>
+        <div class="chart-area">
+            @{
+                RenderChart();
+            }
+            <svg viewBox="0 0 @ChartWidth @ChartHeight" class="chart-svg" xmlns="http://www.w3.org/2000/svg">
+                @foreach (var gl in GridLines)
+                {
+                    <line x1="@P(ChartPadLeft)" y1="@P(gl.Y)" x2="@P(ChartWidth - ChartPadRight)" y2="@P(gl.Y)"
+                          stroke="rgba(255,255,255,0.06)" stroke-width="1" />
+                    @((MarkupString)$"<text x=\"{P(ChartPadLeft - 8)}\" y=\"{P(gl.Y + 4)}\" fill=\"#888\" font-size=\"11\" text-anchor=\"end\" font-family=\"ui-monospace,monospace\">{gl.Label}</text>")
+                }
+
+                @foreach (var xl in XLabels)
+                {
+                    @((MarkupString)$"<text x=\"{P(xl.X)}\" y=\"{P(ChartHeight - 4)}\" fill=\"#888\" font-size=\"10\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{xl.Label}</text>")
+                }
+
+                @if (DividerX > 0)
+                {
+                    <line x1="@P(DividerX)" y1="@P(ChartPadTop)" x2="@P(DividerX)" y2="@P(ChartHeight - ChartPadBottom)"
+                          stroke="rgba(255,255,255,0.15)" stroke-width="1" stroke-dasharray="6,4" />
+                    @((MarkupString)$"<text x=\"{P(DividerX - 6)}\" y=\"{P(ChartPadTop + 14)}\" fill=\"#666\" font-size=\"10\" text-anchor=\"end\" font-family=\"system-ui\">Historical</text>")
+                    @((MarkupString)$"<text x=\"{P(DividerX + 6)}\" y=\"{P(ChartPadTop + 14)}\" fill=\"#666\" font-size=\"10\" text-anchor=\"start\" font-family=\"system-ui\">Projected</text>")
+                }
+
+                @if (!string.IsNullOrEmpty(HistoricalAreaPath))
+                {
+                    <path d="@HistoricalAreaPath" fill="rgba(224,92,92,0.08)" />
+                }
+
+                @if (!string.IsNullOrEmpty(ProjectedAreaPath))
+                {
+                    <path d="@ProjectedAreaPath" fill="rgba(122,162,247,0.08)" />
+                }
+
+                @if (!string.IsNullOrEmpty(HistoricalLinePath))
+                {
+                    <path d="@HistoricalLinePath" fill="none" stroke="#e05c5c" stroke-width="2"
+                          stroke-linecap="round" stroke-linejoin="round" class="chart-line historical-line" />
+                }
+
+                @if (!string.IsNullOrEmpty(ProjectedLinePath))
+                {
+                    <path d="@ProjectedLinePath" fill="none" stroke="#7aa2f7" stroke-width="2"
+                          stroke-dasharray="6,4" stroke-linecap="round" stroke-linejoin="round" class="chart-line projected-line" />
+                }
+
+                @for (int i = 0; i < HistoricalPoints.Count; i++)
+                {
+                    var idx = i;
+                    var pt = HistoricalPoints[idx];
+                    var info = HistoricalBuckets[idx];
+                    var isVisible = (ActiveTooltipIndex == idx) || (HoveredPointIndex == idx && PinnedPointIndex != idx);
+                    var isPinned = PinnedPointIndex == idx;
+                    <g class="chart-point-group"
+                       @onmouseenter="() => OnPointEnter(idx)"
+                       @onmouseleave="() => OnPointLeave(idx)"
+                       @onclick="() => OnPointClick(idx)"
+                       style="cursor:pointer">
+                        <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="14" fill="transparent" />
+                        <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="3.5" fill="#e05c5c" />
+                        @if (isVisible || isPinned)
+                        {
+                            <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="6" fill="rgba(224,92,92,0.3)" stroke="#e05c5c" stroke-width="1.5" />
+                        }
+                    </g>
+                    @if (isVisible || isPinned)
+                    {
+                        @((MarkupString)$"<g><rect x=\"{P(pt.X - 56)}\" y=\"{P(pt.Y - 46)}\" width=\"112\" height=\"36\" rx=\"8\" fill=\"#1a1a1a\" stroke=\"{(isPinned ? "rgba(224,92,92,0.4)" : "rgba(255,255,255,0.15)")}\" stroke-width=\"{(isPinned ? "1.5" : "1")}\" /><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 30)}\" fill=\"#e05c5c\" font-size=\"12\" font-weight=\"600\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Value.ToString("0.00")}</text><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 17)}\" fill=\"#aaa\" font-size=\"10\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Label}</text></g>")
+                    }
+                }
+                @for (int i = 0; i < ProjectedPoints.Count; i++)
+                {
+                    var idx = HistoricalPoints.Count + i;
+                    var pt = ProjectedPoints[i];
+                    var info = ProjectedBuckets[i];
+                    var isVisible = (ActiveTooltipIndex == idx) || (HoveredPointIndex == idx && PinnedPointIndex != idx);
+                    var isPinned = PinnedPointIndex == idx;
+                    <g class="chart-point-group"
+                       @onmouseenter="() => OnPointEnter(idx)"
+                       @onmouseleave="() => OnPointLeave(idx)"
+                       @onclick="() => OnPointClick(idx)"
+                       style="cursor:pointer">
+                        <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="14" fill="transparent" />
+                        <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="3.5" fill="#7aa2f7" stroke="#111" stroke-width="1" />
+                        @if (isVisible || isPinned)
+                        {
+                            <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="6" fill="rgba(122,162,247,0.3)" stroke="#7aa2f7" stroke-width="1.5" />
+                        }
+                    </g>
+                    @if (isVisible || isPinned)
+                    {
+                        @((MarkupString)$"<g><rect x=\"{P(pt.X - 56)}\" y=\"{P(pt.Y - 46)}\" width=\"112\" height=\"36\" rx=\"8\" fill=\"#1a1a1a\" stroke=\"{(isPinned ? "rgba(122,162,247,0.4)" : "rgba(255,255,255,0.15)")}\" stroke-width=\"{(isPinned ? "1.5" : "1")}\" /><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 30)}\" fill=\"#7aa2f7\" font-size=\"12\" font-weight=\"600\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Value.ToString("0.00")}</text><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 17)}\" fill=\"#aaa\" font-size=\"10\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Label}</text></g>")
+                    }
+                }
+            </svg>
+        </div>
+
+        <div class="chart-legend">
+            <span class="legend-item"><span class="legend-dot historical-dot"></span> Historical</span>
+            <span class="legend-item"><span class="legend-dot projected-dot"></span> Projected</span>
+        </div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-card">
+            <span class="summary-label">Avg / @IntervalLabel</span>
+            <span class="summary-value negative">@AvgPerPeriod.ToString("0.00")</span>
+        </div>
+        <div class="summary-card">
+            <span class="summary-label">Projected total</span>
+            <span class="summary-value negative">@ProjectedTotal.ToString("0.00")</span>
+        </div>
+        <div class="summary-card">
+            <span class="summary-label">Companies</span>
+            <span class="summary-value muted">@SelectedCompanyCount / @AllCompanies.Count</span>
+        </div>
+        <div class="summary-card muted-card">
+            <span class="summary-label">Data points</span>
+            <span class="summary-value muted">@HistoricalBuckets.Count</span>
+        </div>
+    </div>
+
+    <div class="card filter-card">
+        <div class="card-head">
+            <span>Companies</span>
+            <span class="count">@SelectedCompanyCount</span>
+        </div>
+
+        <div class="filter-actions">
+            <button class="filter-btn" @onclick="SelectAll">All</button>
+            <button class="filter-btn" @onclick="SelectNone">None</button>
+        </div>
+
+        <ul class="company-list">
+            @foreach (var c in AllCompanies.OrderBy(c => c))
+            {
+                <li class="company-item @(CompanySelected[c] ? "selected" : "")"
+                    @onclick="() => ToggleCompany(c)">
+                    <span class="check-box">
+                        @if (CompanySelected[c])
+                        {
+                            <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" /></svg>
+                        }
+                    </span>
+                    <span class="company-name">@c</span>
+                    <span class="company-amount negative">@CompanyTotals[c].ToString("0.00")</span>
+                </li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    record Tx(DateTime Date, string Company, string Description, string? PaymentMethod, decimal Amount);
+
+    readonly List<Tx> AllTransactions = new();
+    readonly Dictionary<string, bool> CompanySelected = new();
+    readonly Dictionary<string, decimal> CompanyTotals = new();
+    readonly List<string> AllCompanies = new();
+    string? ErrorMessage;
+
+    string SelectedInterval = "month";
+    int PeriodsAhead = 6;
+    int PeriodsInput = 6;
+
+    const int MaxCapYears = 10;
+
+    static readonly Dictionary<string, string> Intervals = new()
+    {
+        ["week"] = "Weeks",
+        ["month"] = "Months",
+        ["year"] = "Years"
+    };
+
+    int MaxPeriodsForInterval => SelectedInterval switch
+    {
+        "week" => MaxCapYears * 52,
+        "month" => MaxCapYears * 12,
+        _ => MaxCapYears
+    };
+
+    string IntervalLabel => SelectedInterval switch
+    {
+        "week" => "week",
+        "year" => "year",
+        _ => "month"
+    };
+
+    int SelectedCompanyCount => CompanySelected.Count(c => c.Value);
+
+    const int ChartWidth = 800;
+    const int ChartHeight = 340;
+    const int ChartPadTop = 30;
+    const int ChartPadBottom = 28;
+    const int ChartPadLeft = 62;
+    const int ChartPadRight = 16;
+
+    List<(string Label, decimal Value)> HistoricalBuckets = new();
+    List<(string Label, decimal Value)> ProjectedBuckets = new();
+    List<(double X, double Y)> HistoricalPoints = new();
+    List<(double X, double Y)> ProjectedPoints = new();
+    List<(double Y, string Label)> GridLines = new();
+    List<(double X, string Label)> XLabels = new();
+    string HistoricalLinePath = "";
+    string ProjectedLinePath = "";
+    string HistoricalAreaPath = "";
+    string ProjectedAreaPath = "";
+    double DividerX;
+    decimal AvgPerPeriod;
+    decimal ProjectedTotal;
+
+    int? HoveredPointIndex;
+    int? PinnedPointIndex;
+    int? ActiveTooltipIndex => PinnedPointIndex ?? HoveredPointIndex;
+
+    void OnPointEnter(int index) => HoveredPointIndex = index;
+
+    void OnPointLeave(int index)
+    {
+        if (HoveredPointIndex == index)
+            HoveredPointIndex = null;
+    }
+
+    void OnPointClick(int index)
+    {
+        if (PinnedPointIndex == index)
+            PinnedPointIndex = null;
+        else
+            PinnedPointIndex = index;
+    }
+
+    static readonly HashSet<string> PaymentProcessors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "PAYPAL","STRIPE","SQUARE","KLARNA","AFTERPAY","CLEARPAY","VENMO",
+        "APPLE PAY","APPLEPAY","GOOGLE PAY","GOOGLEPAY","SAMSUNG PAY",
+        "VISA","MASTERCARD","AMEX","AMERICAN EXPRESS",
+        "REVOLUT","WISE","TRANSFERWISE","SKRILL","NETELLER",
+        "CASH APP","CASHAPP","ZELLE","WORLDPAY","ADYEN","CHECKOUT"
+    };
+
+    static readonly HashSet<string> KnownCompanies = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "NETFLIX","SPOTIFY","APPLE","APPLE MUSIC","YOUTUBE","YOUTUBE PREMIUM",
+        "DISNEY","DISNEY+","DISNEYPLUS","HBO","HBO MAX","HULU","PRIME VIDEO",
+        "AMAZON PRIME","PARAMOUNT","PEACOCK","CRUNCHYROLL","TWITCH","DAZN",
+        "AMAZON","EBAY","ETSY","ALIEXPRESS","ALIBABA","WISH","SHEIN",
+        "WALMART","TARGET","COSTCO","IKEA","WAYFAIR","BEST BUY","BESTBUY",
+        "HOME DEPOT","LOWES","MACYS","NORDSTROM","ZARA","H&M","HM",
+        "UNIQLO","GAP","ASOS","BOOHOO","PRIMARK","NEXT","MARKS SPENCER",
+        "TESCO","SAINSBURYS","ASDA","MORRISONS","ALDI","LIDL","WAITROSE",
+        "ARGOS","CURRYS","JOHN LEWIS","BOOTS","SUPERDRUG",
+        "UBER EATS","UBEREATS","DELIVEROO","DOORDASH","GRUBHUB","JUST EAT",
+        "JUSTEAT","POSTMATES","INSTACART","GOPUFF",
+        "MCDONALDS","BURGER KING","WENDYS","KFC","SUBWAY","DOMINOS",
+        "PIZZA HUT","PAPA JOHNS","CHIPOTLE","TACO BELL","FIVE GUYS",
+        "NANDOS","GREGGS","PRET","PRET A MANGER","COSTA","STARBUCKS",
+        "DUNKIN","TIM HORTONS","KRISPY KREME",
+        "GOOGLE","MICROSOFT","ADOBE","DROPBOX","SLACK","ZOOM","NOTION",
+        "GITHUB","GITLAB","ATLASSIAN","JIRA","CONFLUENCE","TRELLO",
+        "CANVA","FIGMA","SKETCH","INVISION","MIRO",
+        "OPENAI","CHATGPT","MIDJOURNEY","ANTHROPIC",
+        "AWS","AZURE","DIGITALOCEAN","HEROKU","VERCEL","NETLIFY",
+        "GODADDY","NAMECHEAP","CLOUDFLARE","SQUARESPACE","WIX","SHOPIFY",
+        "WORDPRESS","HOSTINGER","BLUEHOST","SITEGROUND",
+        "STEAM","XBOX","PLAYSTATION","NINTENDO","EPIC GAMES","EPICGAMES",
+        "RIOT GAMES","RIOTGAMES","BLIZZARD","EA","ELECTRONIC ARTS","UBISOFT",
+        "ROBLOX","MOJANG","MINECRAFT",
+        "COURSERA","UDEMY","SKILLSHARE","MASTERCLASS","LINKEDIN LEARNING",
+        "PLURALSIGHT","CODECADEMY","TREEHOUSE","BRILLIANT","DUOLINGO",
+        "AUDIBLE","KINDLE","SCRIBD","BLINKIST",
+        "UBER","LYFT","BOLT","GRAB","DIDI","CABIFY","FREENOW",
+        "AIRBNB","BOOKING","BOOKING.COM","EXPEDIA","HOTELS.COM","TRIVAGO",
+        "SKYSCANNER","KAYAK","TRAINLINE","NATIONAL RAIL","TFL",
+        "RYANAIR","EASYJET","BRITISH AIRWAYS","DELTA","UNITED","SOUTHWEST",
+        "HERTZ","AVIS","ENTERPRISE","SIXT","EUROPCAR",
+        "PELOTON","STRAVA","MYFITNESSPAL","HEADSPACE","CALM","FITBIT",
+        "NIKE","ADIDAS","UNDER ARMOUR","PUMA","REEBOK","GYM","PUREGYM",
+        "DAVID LLOYD","VIRGIN ACTIVE","ANYTIME FITNESS","PLANET FITNESS",
+        "PATREON","ONLYFANS","SUBSTACK","MEDIUM","GUMROAD",
+        "EXPERIAN","EQUIFAX","CREDIT KARMA","CLEARSCORE",
+        "VODAFONE","EE","O2","THREE","BT","SKY","VIRGIN MEDIA",
+        "VERIZON","ATT","T-MOBILE","SPRINT","COMCAST","XFINITY",
+        "BRITISH GAS","OCTOPUS ENERGY","BULB","EON","EDF","SSE","SCOTTISH POWER"
+    };
+
+    protected override void OnInitialized()
+    {
+        LoadTransactionsFromCsv();
+        BuildCompanyList();
+        Recalculate();
+    }
+
+    void SetInterval(string interval)
+    {
+        SelectedInterval = interval;
+    }
+
+    void Calculate()
+    {
+        PeriodsAhead = Math.Clamp(PeriodsInput, 1, MaxPeriodsForInterval);
+        PeriodsInput = PeriodsAhead;
+        Recalculate();
+    }
+
+    void ToggleCompany(string company)
+    {
+        CompanySelected[company] = !CompanySelected[company];
+        Recalculate();
+    }
+
+    void SelectAll()
+    {
+        foreach (var c in AllCompanies) CompanySelected[c] = true;
+        Recalculate();
+    }
+
+    void SelectNone()
+    {
+        foreach (var c in AllCompanies) CompanySelected[c] = false;
+        Recalculate();
+    }
+
+    void BuildCompanyList()
+    {
+        AllCompanies.Clear();
+        CompanySelected.Clear();
+        CompanyTotals.Clear();
+
+        var groups = AllTransactions
+            .Where(t => t.Amount < 0)
+            .GroupBy(t => t.Company)
+            .OrderByDescending(g => Math.Abs(g.Sum(t => t.Amount)));
+
+        foreach (var g in groups)
+        {
+            AllCompanies.Add(g.Key);
+            CompanySelected[g.Key] = true;
+            CompanyTotals[g.Key] = g.Sum(t => t.Amount);
+        }
+    }
+
+    IEnumerable<Tx> FilteredTransactions =>
+        AllTransactions.Where(t => t.Amount < 0 && CompanySelected.ContainsKey(t.Company) && CompanySelected[t.Company]);
+
+    void Recalculate()
+    {
+        HistoricalBuckets.Clear();
+        ProjectedBuckets.Clear();
+        HistoricalPoints.Clear();
+        ProjectedPoints.Clear();
+        GridLines.Clear();
+        XLabels.Clear();
+        HistoricalLinePath = "";
+        ProjectedLinePath = "";
+        HistoricalAreaPath = "";
+        ProjectedAreaPath = "";
+        DividerX = 0;
+        AvgPerPeriod = 0;
+        ProjectedTotal = 0;
+        HoveredPointIndex = null;
+        PinnedPointIndex = null;
+
+        var txs = FilteredTransactions.ToList();
+        if (txs.Count == 0) return;
+
+        var grouped = txs
+            .GroupBy(t => BucketKey(t.Date))
+            .OrderBy(g => g.Key)
+            .Select(g => (Label: BucketLabel(g.Key), Value: g.Sum(t => t.Amount)))
+            .ToList();
+
+        if (grouped.Count == 0) return;
+
+        HistoricalBuckets = grouped;
+        AvgPerPeriod = grouped.Average(b => b.Value);
+
+        double sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+        int n = grouped.Count;
+        for (int i = 0; i < n; i++)
+        {
+            double x = i;
+            double y = (double)grouped[i].Value;
+            sumX += x; sumY += y; sumXY += x * y; sumXX += x * x;
+        }
+
+        double slope = n > 1 ? (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX) : 0;
+        double intercept = (sumY - slope * sumX) / n;
+
+        var lastKey = txs.Max(t => t.Date);
+        for (int i = 1; i <= PeriodsAhead; i++)
+        {
+            var futureDate = SelectedInterval switch
+            {
+                "week" => lastKey.AddDays(7 * i),
+                "year" => lastKey.AddYears(i),
+                _ => lastKey.AddMonths(i)
+            };
+            var projectedValue = (decimal)(intercept + slope * (n - 1 + i));
+            if (projectedValue > 0) projectedValue = 0;
+            ProjectedBuckets.Add((BucketLabel(BucketKey(futureDate)), projectedValue));
+        }
+
+        ProjectedTotal = ProjectedBuckets.Sum(b => b.Value);
+
+        var allBuckets = HistoricalBuckets.Concat(ProjectedBuckets).ToList();
+        int totalPoints = allBuckets.Count;
+        if (totalPoints == 0) return;
+
+        decimal minVal = allBuckets.Min(b => b.Value);
+        decimal maxVal = allBuckets.Max(b => b.Value);
+        decimal range = maxVal - minVal;
+        if (range == 0) range = Math.Abs(minVal) > 0 ? Math.Abs(minVal) : 1;
+
+        minVal -= range * 0.1m;
+        maxVal += range * 0.1m;
+        range = maxVal - minVal;
+
+        double plotW = ChartWidth - ChartPadLeft - ChartPadRight;
+        double plotH = ChartHeight - ChartPadTop - ChartPadBottom;
+
+        double MapX(int idx) => ChartPadLeft + (totalPoints > 1 ? (double)idx / (totalPoints - 1) * plotW : plotW / 2);
+        double MapY(decimal val) => ChartPadTop + (double)(1 - (val - minVal) / range) * plotH;
+
+        for (int i = 0; i < HistoricalBuckets.Count; i++)
+        {
+            HistoricalPoints.Add((MapX(i), MapY(HistoricalBuckets[i].Value)));
+        }
+
+        int projStart = HistoricalBuckets.Count;
+        for (int i = 0; i < ProjectedBuckets.Count; i++)
+        {
+            ProjectedPoints.Add((MapX(projStart + i), MapY(ProjectedBuckets[i].Value)));
+        }
+
+        if (HistoricalBuckets.Count > 0 && ProjectedBuckets.Count > 0)
+        {
+            DividerX = (MapX(HistoricalBuckets.Count - 1) + MapX(HistoricalBuckets.Count)) / 2;
+        }
+
+        HistoricalLinePath = BuildLinePath(HistoricalPoints);
+
+        var projLine = new List<(double X, double Y)>();
+        if (HistoricalPoints.Count > 0)
+            projLine.Add(HistoricalPoints[^1]);
+        projLine.AddRange(ProjectedPoints);
+        ProjectedLinePath = BuildLinePath(projLine);
+
+        double baseY = MapY(0) < ChartPadTop ? ChartHeight - ChartPadBottom :
+                       MapY(0) > ChartHeight - ChartPadBottom ? ChartHeight - ChartPadBottom :
+                       MapY(0);
+
+        HistoricalAreaPath = BuildAreaPath(HistoricalPoints, baseY);
+        ProjectedAreaPath = BuildAreaPath(projLine, baseY);
+
+        int gridCount = 5;
+        for (int i = 0; i <= gridCount; i++)
+        {
+            decimal val = minVal + range * i / gridCount;
+            double y = MapY(val);
+            GridLines.Add((y, FormatAmount(val)));
+        }
+
+        int labelStep = Math.Max(1, totalPoints / 8);
+        for (int i = 0; i < totalPoints; i += labelStep)
+        {
+            XLabels.Add((MapX(i), allBuckets[i].Label));
+        }
+        if (totalPoints > 1 && (totalPoints - 1) % labelStep != 0)
+        {
+            XLabels.Add((MapX(totalPoints - 1), allBuckets[^1].Label));
+        }
+    }
+
+    string BucketKey(DateTime d) => SelectedInterval switch
+    {
+        "week" => System.Globalization.ISOWeek.GetYear(d) + "-W" +
+                  System.Globalization.ISOWeek.GetWeekOfYear(d).ToString("D2"),
+        "year" => d.Year.ToString(),
+        _ => d.ToString("yyyy-MM")
+    };
+
+    string BucketLabel(string key)
+    {
+        if (SelectedInterval == "week" && key.Contains("-W"))
+        {
+            var parts = key.Split("-W");
+            return $"W{parts[1]}";
+        }
+        if (SelectedInterval == "year") return key;
+        if (key.Length >= 7)
+        {
+            if (DateTime.TryParseExact(key, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var dt))
+                return dt.ToString("MMM yy");
+        }
+        return key;
+    }
+
+    static string FormatAmount(decimal val)
+    {
+        if (Math.Abs(val) >= 1000)
+            return $"{val / 1000:0.#}k";
+        return val.ToString("0");
+    }
+
+    static string BuildLinePath(List<(double X, double Y)> points)
+    {
+        if (points.Count == 0) return "";
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"M{P(points[0].X)},{P(points[0].Y)}");
+        for (int i = 1; i < points.Count; i++)
+            sb.Append($" L{P(points[i].X)},{P(points[i].Y)}");
+        return sb.ToString();
+    }
+
+    static string BuildAreaPath(List<(double X, double Y)> points, double baseY)
+    {
+        if (points.Count < 2) return "";
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"M{P(points[0].X)},{P(baseY)}");
+        foreach (var pt in points)
+            sb.Append($" L{P(pt.X)},{P(pt.Y)}");
+        sb.Append($" L{P(points[^1].X)},{P(baseY)} Z");
+        return sb.ToString();
+    }
+
+    static string P(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    void RenderChart() { /* triggers Recalculate if needed */ }
+
+
+    void LoadTransactionsFromCsv()
+    {
+        AllTransactions.Clear();
+        ErrorMessage = null;
+
+        var dir = Path.Combine(Env.ContentRootPath, "App_Data", "uploads");
+        if (!Directory.Exists(dir)) return;
+
+        foreach (var filePath in Directory.GetFiles(dir, "*.csv"))
+        {
+            try { ParseCsvFile(filePath); }
+            catch (Exception ex)
+            {
+                ErrorMessage = $"Error reading {Path.GetFileName(filePath)}: {ex.Message}";
+            }
+        }
+    }
+
+    void ParseCsvFile(string filePath)
+    {
+        var lines = File.ReadAllLines(filePath);
+        if (lines.Length < 2) return;
+
+        var headerFields = ParseCsvLine(lines[0]);
+        var columnMap = DetectColumns(headerFields);
+
+        if (columnMap.DateIndex < 0 || columnMap.AmountIndex < 0)
+        {
+            ErrorMessage = $"Could not detect Date/Amount columns in {Path.GetFileName(filePath)}";
+            return;
+        }
+
+        for (var i = 1; i < lines.Length; i++)
+        {
+            if (string.IsNullOrWhiteSpace(lines[i])) continue;
+            var tx = ParseLine(lines[i], columnMap);
+            if (tx is not null) AllTransactions.Add(tx);
+        }
+    }
+
+    record ColumnMap(int DateIndex, int AmountIndex, int MemoIndex, int SubcategoryIndex);
+
+    static ColumnMap DetectColumns(List<string> headers)
+    {
+        int dateIdx = -1, amountIdx = -1, memoIdx = -1, subcategoryIdx = -1;
+        for (var i = 0; i < headers.Count; i++)
+        {
+            var h = headers[i].Trim().ToLowerInvariant();
+            if (dateIdx < 0 && (h == "date" || h == "transaction date" || h == "trans date" || h == "posting date")) dateIdx = i;
+            if (amountIdx < 0 && (h == "amount" || h == "debit" || h == "credit" || h == "value" || h == "transaction amount")) amountIdx = i;
+            if (memoIdx < 0 && (h == "memo" || h == "description" || h == "narrative" || h == "details" || h == "transaction description" || h == "payee")) memoIdx = i;
+            if (subcategoryIdx < 0 && (h == "subcategory" || h == "category" || h == "type")) subcategoryIdx = i;
+        }
+        return new ColumnMap(dateIdx, amountIdx, memoIdx, subcategoryIdx);
+    }
+
+    Tx? ParseLine(string line, ColumnMap map)
+    {
+        var fields = ParseCsvLine(line);
+        var maxRequired = Math.Max(map.DateIndex, Math.Max(map.AmountIndex, Math.Max(map.MemoIndex, map.SubcategoryIndex)));
+        if (fields.Count <= maxRequired) return null;
+
+        var dateStr = fields[map.DateIndex].Trim();
+        if (!TryParseDate(dateStr, out var date)) return null;
+
+        var amountStr = fields[map.AmountIndex].Trim().Replace("$", "").Replace("Â£", "").Replace("â‚¬", "").Replace(",", "");
+        if (!decimal.TryParse(amountStr, out var amount)) return null;
+
+        var memo = map.MemoIndex >= 0 && map.MemoIndex < fields.Count ? fields[map.MemoIndex].Trim() : "";
+        var subcategory = map.SubcategoryIndex >= 0 && map.SubcategoryIndex < fields.Count ? fields[map.SubcategoryIndex].Trim() : "";
+        var (company, paymentMethod) = ExtractCompanyAndPayment(memo);
+        if (company == "Unknown" && !string.IsNullOrWhiteSpace(subcategory))
+        {
+            var (subCompany, _) = ExtractCompanyAndPayment(subcategory);
+            if (subCompany != "Unknown") company = subCompany;
+        }
+        return new Tx(date, company, memo, paymentMethod, amount);
+    }
+
+    static (string Company, string? PaymentMethod) ExtractCompanyAndPayment(string memo)
+    {
+        if (string.IsNullOrWhiteSpace(memo)) return ("Unknown", null);
+        var cleaned = memo.Replace("*", " ").Replace("#", " ").Replace("  ", " ").Trim().ToUpperInvariant();
+        string? paymentMethod = null; string? company = null;
+
+        foreach (var processor in PaymentProcessors)
+        {
+            if (cleaned.Contains(processor, StringComparison.OrdinalIgnoreCase))
+            {
+                paymentMethod = FormatName(processor);
+                var idx = cleaned.IndexOf(processor, StringComparison.OrdinalIgnoreCase);
+                var after = cleaned[(idx + processor.Length)..].Trim();
+                company = FindKnownCompany(after);
+                if (company != null) return (company, paymentMethod);
+                if (!string.IsNullOrWhiteSpace(after))
+                {
+                    var words = after.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (words.Length > 0) return (FormatName(string.Join(" ", words.Take(2))), paymentMethod);
+                }
+            }
+        }
+
+        company = FindKnownCompany(cleaned);
+        if (company != null) return (company, null);
+
+        string[] skipPrefixes = ["CARD", "PAYMENT", "PURCHASE", "POS", "DEBIT", "CREDIT", "DIRECT", "TRANSFER", "REF", "TO", "FROM"];
+        var parts = cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var meaningful = parts.Where(p => !skipPrefixes.Contains(p) && p.Length > 2).Take(2).ToArray();
+        if (meaningful.Length > 0) return (FormatName(string.Join(" ", meaningful)), null);
+        return ("Unknown", null);
+    }
+
+    static string? FindKnownCompany(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        foreach (var c in KnownCompanies.OrderByDescending(c => c.Length))
+            if (text.Contains(c, StringComparison.OrdinalIgnoreCase)) return FormatName(c);
+        return null;
+    }
+
+    static string FormatName(string name) =>
+        string.IsNullOrWhiteSpace(name) ? name :
+        System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(name.ToLowerInvariant());
+
+    static bool TryParseDate(string dateStr, out DateTime date)
+    {
+        string[] formats = ["dd/MM/yyyy","MM/dd/yyyy","yyyy-MM-dd","dd-MM-yyyy","MM-dd-yyyy",
+            "d/M/yyyy","M/d/yyyy","dd MMM yyyy","MMM dd, yyyy"];
+        if (DateTime.TryParseExact(dateStr, formats, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out date)) return true;
+        return DateTime.TryParse(dateStr, out date);
+    }
+
+    static List<string> ParseCsvLine(string line)
+    {
+        var fields = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var inQuotes = false;
+        foreach (var c in line)
+        {
+            if (c == '"') inQuotes = !inQuotes;
+            else if (c == ',' && !inQuotes) { fields.Add(current.ToString()); current.Clear(); }
+            else current.Append(c);
+        }
+        fields.Add(current.ToString());
+        return fields;
+    }
+}
+
+<style>
+    h1 {
+        margin: 0
+    }
+
+    .sub {
+        color: #aaa;
+        margin: .3rem 0 1rem
+    }
+
+    .controls-card {
+        margin-bottom: 1rem;
+    }
+
+    .controls-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .controls-left {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        flex-wrap: wrap;
+    }
+
+    .controls-right {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        flex-wrap: wrap;
+    }
+
+    .interval-label {
+        color: #888;
+        font-size: .85rem;
+        margin-right: .25rem;
+    }
+
+    .periods-input {
+        width: 5.5rem;
+        padding: .45rem .6rem;
+        border-radius: 10px;
+        background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,.12);
+        color: #f3f3f3;
+        font-size: .95rem;
+        font-variant-numeric: tabular-nums;
+        font-family: ui-monospace, monospace;
+        outline: none;
+        transition: border-color .2s ease;
+        -moz-appearance: textfield;
+    }
+
+    .periods-input:focus {
+        border-color: rgba(122,162,247,.5);
+    }
+
+    .periods-input::-webkit-inner-spin-button,
+    .periods-input::-webkit-outer-spin-button {
+        opacity: 1;
+    }
+
+    .calculate-btn {
+        background: #1a1a2e !important;
+        border-color: rgba(122,162,247,.25) !important;
+        color: #7aa2f7 !important;
+        font-weight: 500;
+    }
+
+    .calculate-btn:hover {
+        background: #222244 !important;
+        color: #9bb8ff !important;
+    }
+
+    .calculate-btn svg {
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .input-warning {
+        font-size: .8rem;
+        color: #eaa;
+    }
+
+    .range-value {
+        color: #ccc;
+        font-size: .9rem;
+        font-variant-numeric: tabular-nums;
+        font-family: ui-monospace, monospace;
+    }
+
+    .card {
+        background: #111;
+        border: 1px solid rgba(255,255,255,.08);
+        border-radius: 16px;
+        padding: 1rem;
+        transition: transform .2s ease;
+    }
+
+    .card:hover {
+        transform: translateY(-1px)
+    }
+
+    .card.empty {
+        text-align: center;
+        padding: 2rem;
+        color: #ccc;
+    }
+
+    .card.empty a {
+        color: #7aa2f7;
+        text-decoration: none;
+    }
+
+    .card.empty a:hover {
+        text-decoration: underline
+    }
+
+    .chart-card {
+        max-height: none;
+        margin-bottom: 1rem;
+    }
+
+    .card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: .6rem;
+        color: #ddd;
+    }
+
+    .count {
+        font-size: .85rem;
+        padding: .15rem .5rem;
+        border-radius: 999px;
+        background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,.1);
+    }
+
+    .projection-pill {
+        font-size: .8rem;
+        padding: .15rem .55rem;
+        border-radius: 999px;
+        background: #1a1a2e;
+        border: 1px solid rgba(122,162,247,.2);
+        color: #7aa2f7;
+    }
+
+    .chart-area {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .chart-svg {
+        width: 100%;
+        min-width: 500px;
+        height: auto;
+        display: block;
+    }
+
+    .chart-line {
+        pointer-events: none;
+    }
+
+    .chart-point-group {
+        pointer-events: all;
+    }
+
+    .chart-legend {
+        display: flex;
+        gap: 1.25rem;
+        justify-content: center;
+        margin-top: .75rem;
+        font-size: .85rem;
+        color: #aaa;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: .4rem;
+    }
+
+    .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .historical-dot {
+        background: #e05c5c
+    }
+
+    .projected-dot {
+        background: #7aa2f7
+    }
+
+    .error-banner {
+        background: rgba(224,92,92,.15);
+        border: 1px solid rgba(224,92,92,.3);
+        border-radius: 12px;
+        padding: .75rem 1rem;
+        margin-bottom: 1rem;
+        color: #eaa;
+    }
+
+    .tool {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        padding: .45rem .7rem;
+        border-radius: 12px;
+        background: #141414;
+        border: 1px solid rgba(255,255,255,.08);
+        color: #ccc;
+        cursor: pointer;
+        transition: background .2s ease,transform .2s ease,border .2s ease,color .2s ease;
+    }
+
+    .tool:hover {
+        background: #1c1c1c;
+        transform: translateY(-1px);
+        color: #fff;
+    }
+
+    .tool.active {
+        background: #1f1f1f;
+        border-color: rgba(255,255,255,.18);
+        color: #fff;
+    }
+
+    .filter-card {
+        max-height: 50vh;
+        overflow: auto;
+        margin-top: 1rem;
+    }
+
+    .filter-actions {
+        display: flex;
+        gap: .4rem;
+        margin-bottom: .6rem;
+    }
+
+    .filter-btn {
+        padding: .3rem .6rem;
+        border-radius: 10px;
+        background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,.08);
+        color: #ccc;
+        cursor: pointer;
+        font-size: .8rem;
+        transition: background .2s ease, color .2s ease;
+    }
+
+    .filter-btn:hover {
+        background: #222;
+        color: #fff;
+    }
+
+    .company-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: .35rem;
+    }
+
+    .company-item {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        padding: .5rem .6rem;
+        border-radius: 10px;
+        background: #151515;
+        border: 1px solid rgba(255,255,255,.06);
+        cursor: pointer;
+        transition: background .2s ease, border-color .2s ease, opacity .2s ease;
+        user-select: none;
+    }
+
+    .company-item:hover {
+        background: #1c1c1c;
+    }
+
+    .company-item:not(.selected) {
+        opacity: .5;
+    }
+
+    .company-item.selected {
+        border-color: rgba(255,255,255,.12);
+    }
+
+    .check-box {
+        width: 18px;
+        height: 18px;
+        border-radius: 5px;
+        border: 1px solid rgba(255,255,255,.15);
+        background: #1a1a1a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        transition: background .2s ease, border-color .2s ease;
+    }
+
+    .company-item.selected .check-box {
+        background: #7aa2f7;
+        border-color: #7aa2f7;
+    }
+
+    .check-box svg {
+        width: 12px;
+        height: 12px;
+        stroke: #fff;
+        fill: none;
+        stroke-width: 2.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .company-name {
+        flex: 1 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: .85rem;
+        color: #eaeaea;
+    }
+
+    .company-amount {
+        flex: 0 0 auto;
+        font-size: .8rem;
+        font-variant-numeric: tabular-nums;
+        font-family: ui-monospace, monospace;
+    }
+
+    .pill {
+        display: inline-block;
+        padding: .15rem .55rem;
+        border-radius: 999px;
+        background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,.08);
+        color: #f3f3f3;
+    }
+
+    .muted {
+        color: #999
+    }
+
+    .negative {
+        color: #e05c5c !important
+    }
+
+    .positive {
+        color: #5ce07a !important
+    }
+
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: .75rem;
+        margin-bottom: 1rem;
+    }
+
+    @@media (max-width: 768px) {
+        .summary-grid {
+            grid-template-columns: repeat(2, 1fr)
+        }
+
+        .controls-row {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+
+    .summary-card {
+        display: flex;
+        flex-direction: column;
+        gap: .25rem;
+        padding: .75rem 1rem;
+        background: #111;
+        border: 1px solid rgba(255,255,255,.08);
+        border-radius: 12px;
+    }
+
+    .summary-card.muted-card {
+        background: #0d0d0d
+    }
+
+    .summary-label {
+        font-size: .8rem;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .summary-value {
+        font-size: 1.25rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        font-family: ui-monospace, monospace;
+    }
+
+    .summary-value.muted {
+        color: #ccc
+    }
+</style>
