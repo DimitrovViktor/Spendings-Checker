@@ -18,6 +18,8 @@ Transactions are taken from CSV files and listed along with total amounts of spe
 
 ## Subscriptions Page
 
+Transaction info is taken from CSF files and recurring payments are marked as subscriptions, each company has a profile with details for all recurring payments.
+
 ## Projections Page
 
 ## TO-DO:
