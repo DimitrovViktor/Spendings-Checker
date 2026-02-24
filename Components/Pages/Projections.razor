@@ -33,24 +33,39 @@ else
             </div>
             <div class="controls-right">
                 <span class="interval-label">Periods ahead</span>
-                <input type="number" min="1" max="@MaxPeriodsForInterval" @bind="PeriodsInput" class="periods-input" />
+                <input type="number" min="1" @bind="PeriodsInput" class="periods-input" />
                 <span class="range-value">@IntervalLabel@(PeriodsInput != 1 ? "s" : "")</span>
                 <button class="tool calculate-btn" @onclick="Calculate">
                     <svg viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z" /></svg>
                     Calculate
                 </button>
-                @if (PeriodsInput > MaxPeriodsForInterval)
-                {
-                    <span class="input-warning">Max @MaxPeriodsForInterval @IntervalLabel@(MaxPeriodsForInterval != 1 ? "s" : "") (@MaxCapYears yr cap)</span>
-                }
             </div>
+        </div>
+        <div class="mode-row">
+            <span class="interval-label">Mode</span>
+            <button class="tool mode-btn @(SelectedMode == "all" ? "active" : "")" @onclick='() => SetMode("all")'>
+                <svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 16l4-4 4 4 5-6" /></svg>
+                All Spendings
+            </button>
+            <button class="tool mode-btn @(SelectedMode == "smart" ? "active" : "")" @onclick='() => SetMode("smart")'>
+                <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5" /></svg>
+                Sub-Aware
+            </button>
+            <button class="tool mode-btn @(SelectedMode == "subonly" ? "active" : "")" @onclick='() => SetMode("subonly")'>
+                <svg viewBox="0 0 24 24"><path d="M12 8v4l3 3M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>
+                Sub-Only
+            </button>
+            <span class="mode-hint">@ModeHint</span>
         </div>
     </div>
 
     <div class="card chart-card">
         <div class="card-head">
             <span>Spending Projection</span>
-            <span class="pill projection-pill">@PeriodsAhead @IntervalLabel@(PeriodsAhead != 1 ? "s" : "") ahead</span>
+            <div class="card-head-pills">
+                <span class="pill mode-pill @SelectedMode">@ModeLabel</span>
+                <span class="pill projection-pill">@PeriodsAhead @IntervalLabel@(PeriodsAhead != 1 ? "s" : "") ahead</span>
+            </div>
         </div>
         <div class="chart-area">
             @{
@@ -77,82 +92,132 @@ else
                     @((MarkupString)$"<text x=\"{P(DividerX + 6)}\" y=\"{P(ChartPadTop + 14)}\" fill=\"#666\" font-size=\"10\" text-anchor=\"start\" font-family=\"system-ui\">Projected</text>")
                 }
 
-                @if (!string.IsNullOrEmpty(HistoricalAreaPath))
+                @if (ShowHistorical && !string.IsNullOrEmpty(HistoricalAreaPath))
                 {
                     <path d="@HistoricalAreaPath" fill="rgba(224,92,92,0.08)" />
                 }
 
-                @if (!string.IsNullOrEmpty(ProjectedAreaPath))
+                @if (ShowProjected && !string.IsNullOrEmpty(ProjectedAreaPath))
                 {
                     <path d="@ProjectedAreaPath" fill="rgba(122,162,247,0.08)" />
                 }
 
-                @if (!string.IsNullOrEmpty(HistoricalLinePath))
+                @if (ShowExclusion && !string.IsNullOrEmpty(ExclusionAreaPath))
+                {
+                    <path d="@ExclusionAreaPath" fill="rgba(224,169,62,0.06)" />
+                }
+
+                @if (ShowHistorical && !string.IsNullOrEmpty(HistoricalLinePath))
                 {
                     <path d="@HistoricalLinePath" fill="none" stroke="#e05c5c" stroke-width="2"
                           stroke-linecap="round" stroke-linejoin="round" class="chart-line historical-line" />
                 }
 
-                @if (!string.IsNullOrEmpty(ProjectedLinePath))
+                @if (ShowProjected && !string.IsNullOrEmpty(ProjectedLinePath))
                 {
                     <path d="@ProjectedLinePath" fill="none" stroke="#7aa2f7" stroke-width="2"
                           stroke-dasharray="6,4" stroke-linecap="round" stroke-linejoin="round" class="chart-line projected-line" />
                 }
 
-                @for (int i = 0; i < HistoricalPoints.Count; i++)
+                @if (ShowExclusion && !string.IsNullOrEmpty(ExclusionLinePath))
                 {
-                    var idx = i;
-                    var pt = HistoricalPoints[idx];
-                    var info = HistoricalBuckets[idx];
-                    var isVisible = (ActiveTooltipIndex == idx) || (HoveredPointIndex == idx && PinnedPointIndex != idx);
-                    var isPinned = PinnedPointIndex == idx;
-                    <g class="chart-point-group"
-                       @onmouseenter="() => OnPointEnter(idx)"
-                       @onmouseleave="() => OnPointLeave(idx)"
-                       @onclick="() => OnPointClick(idx)"
-                       style="cursor:pointer">
-                        <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="14" fill="transparent" />
-                        <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="3.5" fill="#e05c5c" />
+                    <path d="@ExclusionLinePath" fill="none" stroke="#e0a93e" stroke-width="1.5"
+                          stroke-dasharray="4,4" stroke-linecap="round" stroke-linejoin="round" />
+                }
+
+                @if (ShowExclusion)
+                {
+                    @for (int i = 0; i < ExclusionPoints.Count && i < ExclusionBuckets.Count; i++)
+                    {
+                        var idx = i;
+                        var pt = ExclusionPoints[idx];
+                        var info = ExclusionBuckets[idx];
+                        var isVisible = (ActiveExclusionTooltipIndex == idx) || (HoveredExclusionIndex == idx && PinnedExclusionIndex != idx);
+                        var isPinned = PinnedExclusionIndex == idx;
+                        <g class="chart-point-group"
+                           @onmouseenter="() => OnExclusionPointEnter(idx)"
+                           @onmouseleave="() => OnExclusionPointLeave(idx)"
+                           @onclick="() => OnExclusionPointClick(idx)"
+                           style="cursor:pointer">
+                            <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="14" fill="transparent" />
+                            <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="3.5" fill="#e0a93e" />
+                            @if (isVisible || isPinned)
+                            {
+                                <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="6" fill="rgba(224,169,62,0.3)" stroke="#e0a93e" stroke-width="1.5" />
+                            }
+                        </g>
                         @if (isVisible || isPinned)
                         {
-                            <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="6" fill="rgba(224,92,92,0.3)" stroke="#e05c5c" stroke-width="1.5" />
+                            @((MarkupString)$"<g><rect x=\"{P(pt.X - 56)}\" y=\"{P(pt.Y - 46)}\" width=\"112\" height=\"36\" rx=\"8\" fill=\"#1a1a1a\" stroke=\"{(isPinned ? "rgba(224,169,62,0.4)" : "rgba(255,255,255,0.15)")}\" stroke-width=\"{(isPinned ? "1.5" : "1")}\" /><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 30)}\" fill=\"#e0a93e\" font-size=\"12\" font-weight=\"600\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Value.ToString("0.00")}</text><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 17)}\" fill=\"#aaa\" font-size=\"10\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Label}</text></g>")
                         }
-                    </g>
-                    @if (isVisible || isPinned)
-                    {
-                        @((MarkupString)$"<g><rect x=\"{P(pt.X - 56)}\" y=\"{P(pt.Y - 46)}\" width=\"112\" height=\"36\" rx=\"8\" fill=\"#1a1a1a\" stroke=\"{(isPinned ? "rgba(224,92,92,0.4)" : "rgba(255,255,255,0.15)")}\" stroke-width=\"{(isPinned ? "1.5" : "1")}\" /><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 30)}\" fill=\"#e05c5c\" font-size=\"12\" font-weight=\"600\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Value.ToString("0.00")}</text><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 17)}\" fill=\"#aaa\" font-size=\"10\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Label}</text></g>")
                     }
                 }
-                @for (int i = 0; i < ProjectedPoints.Count; i++)
+
+                @if (ShowHistorical)
                 {
-                    var idx = HistoricalPoints.Count + i;
-                    var pt = ProjectedPoints[i];
-                    var info = ProjectedBuckets[i];
-                    var isVisible = (ActiveTooltipIndex == idx) || (HoveredPointIndex == idx && PinnedPointIndex != idx);
-                    var isPinned = PinnedPointIndex == idx;
-                    <g class="chart-point-group"
-                       @onmouseenter="() => OnPointEnter(idx)"
-                       @onmouseleave="() => OnPointLeave(idx)"
-                       @onclick="() => OnPointClick(idx)"
-                       style="cursor:pointer">
-                        <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="14" fill="transparent" />
-                        <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="3.5" fill="#7aa2f7" stroke="#111" stroke-width="1" />
+                    @for (int i = 0; i < HistoricalPoints.Count; i++)
+                    {
+                        var idx = i;
+                        var pt = HistoricalPoints[idx];
+                        var info = HistoricalBuckets[idx];
+                        var isVisible = (ActiveTooltipIndex == idx) || (HoveredPointIndex == idx && PinnedPointIndex != idx);
+                        var isPinned = PinnedPointIndex == idx;
+                        <g class="chart-point-group"
+                           @onmouseenter="() => OnPointEnter(idx)"
+                           @onmouseleave="() => OnPointLeave(idx)"
+                           @onclick="() => OnPointClick(idx)"
+                           style="cursor:pointer">
+                            <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="14" fill="transparent" />
+                            <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="3.5" fill="#e05c5c" />
+                            @if (isVisible || isPinned)
+                            {
+                                <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="6" fill="rgba(224,92,92,0.3)" stroke="#e05c5c" stroke-width="1.5" />
+                            }
+                        </g>
                         @if (isVisible || isPinned)
                         {
-                            <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="6" fill="rgba(122,162,247,0.3)" stroke="#7aa2f7" stroke-width="1.5" />
+                            @((MarkupString)$"<g><rect x=\"{P(pt.X - 56)}\" y=\"{P(pt.Y - 46)}\" width=\"112\" height=\"36\" rx=\"8\" fill=\"#1a1a1a\" stroke=\"{(isPinned ? "rgba(224,92,92,0.4)" : "rgba(255,255,255,0.15)")}\" stroke-width=\"{(isPinned ? "1.5" : "1")}\" /><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 30)}\" fill=\"#e05c5c\" font-size=\"12\" font-weight=\"600\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Value.ToString("0.00")}</text><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 17)}\" fill=\"#aaa\" font-size=\"10\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Label}</text></g>")
                         }
-                    </g>
-                    @if (isVisible || isPinned)
+                    }
+                }
+
+                @if (ShowProjected)
+                {
+                    @for (int i = 0; i < ProjectedPoints.Count; i++)
                     {
-                        @((MarkupString)$"<g><rect x=\"{P(pt.X - 56)}\" y=\"{P(pt.Y - 46)}\" width=\"112\" height=\"36\" rx=\"8\" fill=\"#1a1a1a\" stroke=\"{(isPinned ? "rgba(122,162,247,0.4)" : "rgba(255,255,255,0.15)")}\" stroke-width=\"{(isPinned ? "1.5" : "1")}\" /><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 30)}\" fill=\"#7aa2f7\" font-size=\"12\" font-weight=\"600\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Value.ToString("0.00")}</text><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 17)}\" fill=\"#aaa\" font-size=\"10\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Label}</text></g>")
+                        var idx = HistoricalPoints.Count + i;
+                        var pt = ProjectedPoints[i];
+                        var info = ProjectedBuckets[i];
+                        var isVisible = (ActiveTooltipIndex == idx) || (HoveredPointIndex == idx && PinnedPointIndex != idx);
+                        var isPinned = PinnedPointIndex == idx;
+                        <g class="chart-point-group"
+                           @onmouseenter="() => OnPointEnter(idx)"
+                           @onmouseleave="() => OnPointLeave(idx)"
+                           @onclick="() => OnPointClick(idx)"
+                           style="cursor:pointer">
+                            <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="14" fill="transparent" />
+                            <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="3.5" fill="#7aa2f7" stroke="#111" stroke-width="1" />
+                            @if (isVisible || isPinned)
+                            {
+                                <circle cx="@P(pt.X)" cy="@P(pt.Y)" r="6" fill="rgba(122,162,247,0.3)" stroke="#7aa2f7" stroke-width="1.5" />
+                            }
+                        </g>
+                        @if (isVisible || isPinned)
+                        {
+                            @((MarkupString)$"<g><rect x=\"{P(pt.X - 56)}\" y=\"{P(pt.Y - 46)}\" width=\"112\" height=\"36\" rx=\"8\" fill=\"#1a1a1a\" stroke=\"{(isPinned ? "rgba(122,162,247,0.4)" : "rgba(255,255,255,0.15)")}\" stroke-width=\"{(isPinned ? "1.5" : "1")}\" /><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 30)}\" fill=\"#7aa2f7\" font-size=\"12\" font-weight=\"600\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Value.ToString("0.00")}</text><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 17)}\" fill=\"#aaa\" font-size=\"10\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Label}</text></g>")
+                        }
                     }
                 }
             </svg>
         </div>
 
         <div class="chart-legend">
-            <span class="legend-item"><span class="legend-dot historical-dot"></span> Historical</span>
-            <span class="legend-item"><span class="legend-dot projected-dot"></span> Projected</span>
+            <span class="legend-item @(!ShowHistorical ? "inactive" : "")" @onclick="ToggleHistorical"><span class="legend-dot historical-dot @(!ShowHistorical ? "inactive" : "")"></span> Historical</span>
+            <span class="legend-item @(!ShowProjected ? "inactive" : "")" @onclick="ToggleProjected"><span class="legend-dot projected-dot @(!ShowProjected ? "inactive" : "")"></span> Projected</span>
+            @if (ExclusionPoints.Count > 0)
+            {
+                <span class="legend-item @(!ShowExclusion ? "inactive" : "")" @onclick="ToggleExclusion"><span class="legend-dot exclusion-dot @(!ShowExclusion ? "inactive" : "")"></span> Without deselected</span>
+            }
         </div>
     </div>
 
@@ -189,19 +254,149 @@ else
         <ul class="company-list">
             @foreach (var c in AllCompanies.OrderBy(c => c))
             {
-                <li class="company-item @(CompanySelected[c] ? "selected" : "")"
-                    @onclick="() => ToggleCompany(c)">
-                    <span class="check-box">
+                <li class="company-item @(CompanySelected[c] ? "selected" : "")">
+                    <span class="check-box" @onclick="() => ToggleCompany(c)">
                         @if (CompanySelected[c])
                         {
                             <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" /></svg>
                         }
                     </span>
-                    <span class="company-name">@c</span>
+                    <span class="company-name" @onclick="() => ToggleCompany(c)">
+                        @c
+                        @if (CompanyAnalyses.ContainsKey(c) && CompanyAnalyses[c].Behavior == CompanyBehavior.ActiveSubscription)
+                        {
+                            <span class="sub-indicator" title="Active subscription">●</span>
+                        }
+                    </span>
+                    @if (CancellationDates.ContainsKey(c))
+                    {
+                        <span class="cancel-badge">cancels @CancellationDates[c].ToString("MMM dd")</span>
+                    }
                     <span class="company-amount negative">@CompanyTotals[c].ToString("0.00")</span>
+                    <button class="profile-btn" @onclick="() => OpenProfile(c)" title="View details">
+                        <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" /></svg>
+                    </button>
                 </li>
             }
         </ul>
+    </div>
+}
+
+@if (ProfileCompany is not null)
+{
+    var profileTxs = AllTransactions
+        .Where(t => string.Equals(t.Company, ProfileCompany, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(t => t.Date)
+        .ToList();
+
+    var profileMonths = profileTxs.Select(t => new { t.Date.Year, t.Date.Month }).Distinct().Count();
+    var profileTotal = profileTxs.Where(t => t.Amount < 0).Sum(t => t.Amount);
+    var profileAvg = profileMonths > 0 ? profileTotal / profileMonths : 0m;
+
+    var hasBehavior = CompanyAnalyses.ContainsKey(ProfileCompany);
+    var behavior = hasBehavior ? CompanyAnalyses[ProfileCompany].Behavior : CompanyBehavior.Irregular;
+    var behaviorLabel = behavior switch
+    {
+        CompanyBehavior.ActiveSubscription => "Active Subscription",
+        CompanyBehavior.RecurringReturner => "Recurring Returner",
+        CompanyBehavior.CancelledSubscription => "Cancelled",
+        CompanyBehavior.OneOff => "One-Off",
+        _ => "Irregular"
+    };
+
+    <div class="profile-overlay" @onclick="CloseProfile">
+        <div class="profile-panel" @onclick:stopPropagation="true">
+            <div class="profile-header">
+                <button class="back-btn" @onclick="CloseProfile">
+                    <svg viewBox="0 0 24 24"><path d="M19 12H5M5 12l7-7M5 12l7 7" /></svg>
+                    Back
+                </button>
+                <span class="profile-title">@ProfileCompany</span>
+                <span class="pill behavior-pill @behavior.ToString().ToLowerInvariant()">@behaviorLabel</span>
+            </div>
+
+            <div class="profile-stats">
+                <div class="stat-card">
+                    <span class="stat-label">Transactions</span>
+                    <span class="stat-value">@profileTxs.Count</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Months Active</span>
+                    <span class="stat-value">@profileMonths</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Total Spent</span>
+                    <span class="stat-value negative">@profileTotal.ToString("0.00")</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Avg / Month</span>
+                    <span class="stat-value negative">@profileAvg.ToString("0.00")</span>
+                </div>
+            </div>
+
+            @if (behavior == CompanyBehavior.ActiveSubscription || behavior == CompanyBehavior.RecurringReturner)
+            {
+                <div class="card cancel-card">
+                    <div class="card-head">
+                        <span>Plan Cancellation</span>
+                    </div>
+                    @if (CancellationDates.ContainsKey(ProfileCompany))
+                    {
+                        <div class="cancel-info">
+                            <span>Scheduled for <strong>@CancellationDates[ProfileCompany].ToString("yyyy-MM-dd")</strong></span>
+                            <button class="filter-btn cancel-remove" @onclick="() => RemoveCancellation(ProfileCompany)">Remove</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="cancel-form">
+                            <span class="cancel-label">Set a cancellation date to exclude this subscription from projections after that date:</span>
+                            <div class="cancel-input-row">
+                                <input type="date" @bind="CancelDateInput" class="cancel-date-input" />
+                                <button class="tool calculate-btn" @onclick="() => SetCancellation(ProfileCompany)">
+                                    Set Cancellation
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            <div class="card profile-tx-card">
+                <div class="card-head">
+                    <span>Transactions</span>
+                    <span class="count">@profileTxs.Count</span>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th>Payment</th>
+                                <th class="r">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var t in profileTxs)
+                            {
+                                <tr>
+                                    <td class="mono">@t.Date.ToString("yyyy-MM-dd")</td>
+                                    <td class="muted">@t.Description</td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(t.PaymentMethod))
+                                        {
+                                            <span class="pill payment">@t.PaymentMethod</span>
+                                        }
+                                    </td>
+                                    <td class="r mono @(t.Amount < 0 ? "negative" : "positive")">@t.Amount.ToString("0.00")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 }
 
@@ -214,24 +409,34 @@ else
     readonly List<string> AllCompanies = new();
     string? ErrorMessage;
 
+    string? ProfileCompany;
+    DateTime CancelDateInput = DateTime.Today.AddMonths(1);
+    readonly Dictionary<string, DateTime> CancellationDates = new();
+
     string SelectedInterval = "month";
     int PeriodsAhead = 6;
     int PeriodsInput = 6;
+    string SelectedMode = "all";
 
-    const int MaxCapYears = 10;
+    string ModeLabel => SelectedMode switch
+    {
+        "smart" => "Sub-Aware",
+        "subonly" => "Sub-Only",
+        _ => "All Spendings"
+    };
+
+    string ModeHint => SelectedMode switch
+    {
+        "smart" => "Subs + irregular trend, excludes cancelled & one-offs",
+        "subonly" => "Coming soon — subscriptions only",
+        _ => "Trend line across all transactions"
+    };
 
     static readonly Dictionary<string, string> Intervals = new()
     {
         ["week"] = "Weeks",
         ["month"] = "Months",
         ["year"] = "Years"
-    };
-
-    int MaxPeriodsForInterval => SelectedInterval switch
-    {
-        "week" => MaxCapYears * 52,
-        "month" => MaxCapYears * 12,
-        _ => MaxCapYears
     };
 
     string IntervalLabel => SelectedInterval switch
@@ -260,6 +465,10 @@ else
     string ProjectedLinePath = "";
     string HistoricalAreaPath = "";
     string ProjectedAreaPath = "";
+    string ExclusionLinePath = "";
+    string ExclusionAreaPath = "";
+    List<(double X, double Y)> ExclusionPoints = new();
+    List<(string Label, decimal Value)> ExclusionBuckets = new();
     double DividerX;
     decimal AvgPerPeriod;
     decimal ProjectedTotal;
@@ -267,6 +476,14 @@ else
     int? HoveredPointIndex;
     int? PinnedPointIndex;
     int? ActiveTooltipIndex => PinnedPointIndex ?? HoveredPointIndex;
+
+    int? HoveredExclusionIndex;
+    int? PinnedExclusionIndex;
+    int? ActiveExclusionTooltipIndex => PinnedExclusionIndex ?? HoveredExclusionIndex;
+
+    bool ShowHistorical = true;
+    bool ShowProjected = true;
+    bool ShowExclusion = true;
 
     void OnPointEnter(int index) => HoveredPointIndex = index;
 
@@ -283,6 +500,26 @@ else
         else
             PinnedPointIndex = index;
     }
+
+    void OnExclusionPointEnter(int index) => HoveredExclusionIndex = index;
+
+    void OnExclusionPointLeave(int index)
+    {
+        if (HoveredExclusionIndex == index)
+            HoveredExclusionIndex = null;
+    }
+
+    void OnExclusionPointClick(int index)
+    {
+        if (PinnedExclusionIndex == index)
+            PinnedExclusionIndex = null;
+        else
+            PinnedExclusionIndex = index;
+    }
+
+    void ToggleHistorical() => ShowHistorical = !ShowHistorical;
+    void ToggleProjected() => ShowProjected = !ShowProjected;
+    void ToggleExclusion() => ShowExclusion = !ShowExclusion;
 
     static readonly HashSet<string> PaymentProcessors = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -341,6 +578,7 @@ else
     protected override void OnInitialized()
     {
         LoadTransactionsFromCsv();
+        AnalyzeCompanyBehaviors();
         BuildCompanyList();
         Recalculate();
     }
@@ -350,9 +588,15 @@ else
         SelectedInterval = interval;
     }
 
+    void SetMode(string mode)
+    {
+        SelectedMode = mode;
+        Recalculate();
+    }
+
     void Calculate()
     {
-        PeriodsAhead = Math.Clamp(PeriodsInput, 1, MaxPeriodsForInterval);
+        PeriodsAhead = Math.Max(1, PeriodsInput);
         PeriodsInput = PeriodsAhead;
         Recalculate();
     }
@@ -372,6 +616,29 @@ else
     void SelectNone()
     {
         foreach (var c in AllCompanies) CompanySelected[c] = false;
+        Recalculate();
+    }
+
+    void OpenProfile(string company)
+    {
+        ProfileCompany = company;
+        CancelDateInput = DateTime.Today.AddMonths(1);
+    }
+
+    void CloseProfile() => ProfileCompany = null;
+
+    void SetCancellation(string company)
+    {
+        if (CancelDateInput > DateTime.Today)
+        {
+            CancellationDates[company] = CancelDateInput;
+            Recalculate();
+        }
+    }
+
+    void RemoveCancellation(string company)
+    {
+        CancellationDates.Remove(company);
         Recalculate();
     }
 
@@ -397,6 +664,171 @@ else
     IEnumerable<Tx> FilteredTransactions =>
         AllTransactions.Where(t => t.Amount < 0 && CompanySelected.ContainsKey(t.Company) && CompanySelected[t.Company]);
 
+    enum CompanyBehavior { ActiveSubscription, RecurringReturner, CancelledSubscription, OneOff, Irregular }
+
+    record CompanyAnalysis(string Company, CompanyBehavior Behavior, decimal TypicalAmount, int DistinctMonths, int MonthsSinceLastCharge, decimal ProjectionWeight);
+
+    readonly Dictionary<string, CompanyAnalysis> CompanyAnalyses = new();
+
+    void AnalyzeCompanyBehaviors()
+    {
+        CompanyAnalyses.Clear();
+
+        var now = AllTransactions.Count > 0 ? AllTransactions.Max(t => t.Date) : DateTime.UtcNow;
+        var lastMonthKey = $"{now.Year}-{now.Month:D2}";
+        var nowMonth = new DateTime(now.Year, now.Month, 1);
+
+        var companyGroups = AllTransactions
+            .Where(t => t.Amount < 0)
+            .GroupBy(t => t.Company, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var g in companyGroups)
+        {
+            var sortedDates = g.Select(t => t.Date.Date).Distinct().OrderBy(d => d).ToList();
+            var distinctMonths = g.Select(t => $"{t.Date.Year}-{t.Date.Month:D2}").Distinct().OrderBy(m => m).ToList();
+
+            var amounts = g.Select(t => Math.Round(t.Amount, 2)).ToList();
+            var amountGroups = amounts.GroupBy(a => a).OrderByDescending(x => x.Count()).ToList();
+            var typicalAmount = amountGroups.First().Key;
+            var mostCommonCount = amountGroups.First().Count();
+            decimal amountConsistency = (decimal)mostCommonCount / amounts.Count;
+
+            var stdDev = 0.0;
+            if (amounts.Count > 1)
+            {
+                var avg = (double)amounts.Average();
+                stdDev = Math.Sqrt(amounts.Select(a => Math.Pow((double)a - avg, 2)).Average());
+            }
+            var coeffOfVariation = amounts.Average() != 0 ? (decimal)stdDev / Math.Abs(amounts.Average()) : 0;
+            bool hasConsistentAmount = amountConsistency >= 0.5m || coeffOfVariation < 0.3m;
+
+            var lastChargeDate = sortedDates.Last();
+            var lastChargeMonth = new DateTime(lastChargeDate.Year, lastChargeDate.Month, 1);
+            int monthsSinceLast = ((nowMonth.Year - lastChargeMonth.Year) * 12) + nowMonth.Month - lastChargeMonth.Month;
+
+            if (distinctMonths.Count < 2)
+            {
+                CompanyAnalyses[g.Key] = new CompanyAnalysis(g.Key, CompanyBehavior.OneOff, typicalAmount, distinctMonths.Count, monthsSinceLast, 0m);
+                continue;
+            }
+
+            var gaps = new List<double>();
+            for (int i = 1; i < sortedDates.Count; i++)
+                gaps.Add((sortedDates[i] - sortedDates[i - 1]).TotalDays);
+
+            var medianGap = gaps.OrderBy(x => x).ElementAt(gaps.Count / 2);
+            bool looksRecurring = medianGap <= 40 && distinctMonths.Count >= 3 && hasConsistentAmount;
+
+            bool chargedRecently = monthsSinceLast <= 1;
+
+            if (looksRecurring && chargedRecently)
+            {
+                CompanyAnalyses[g.Key] = new CompanyAnalysis(g.Key, CompanyBehavior.ActiveSubscription, typicalAmount, distinctMonths.Count, monthsSinceLast, 1.0m);
+                continue;
+            }
+
+            if (looksRecurring && !chargedRecently)
+            {
+                bool hasReturnerPattern = DetectReturnerPattern(distinctMonths);
+                if (hasReturnerPattern)
+                {
+                    decimal weight = CalculateReturnerWeight(monthsSinceLast, distinctMonths.Count);
+                    CompanyAnalyses[g.Key] = new CompanyAnalysis(g.Key, CompanyBehavior.RecurringReturner, typicalAmount, distinctMonths.Count, monthsSinceLast, weight);
+                }
+                else
+                {
+                    CompanyAnalyses[g.Key] = new CompanyAnalysis(g.Key, CompanyBehavior.CancelledSubscription, typicalAmount, distinctMonths.Count, monthsSinceLast, 0m);
+                }
+                continue;
+            }
+
+            CompanyAnalyses[g.Key] = new CompanyAnalysis(g.Key, CompanyBehavior.Irregular, typicalAmount, distinctMonths.Count, monthsSinceLast, 0m);
+        }
+    }
+
+    decimal CalculateReturnerWeight(int monthsSinceLast, int distinctMonths)
+    {
+        decimal recencyDecay;
+        if (monthsSinceLast <= 1)
+            recencyDecay = 0.20m;
+        else if (monthsSinceLast <= 2)
+            recencyDecay = 0.12m;
+        else if (monthsSinceLast <= 3)
+            recencyDecay = 0.08m;
+        else if (monthsSinceLast <= 6)
+            recencyDecay = 0.04m;
+        else
+            recencyDecay = 0.01m;
+
+        decimal historyBoost = distinctMonths >= 6 ? 1.2m : distinctMonths >= 4 ? 1.0m : 0.8m;
+
+        return Math.Min(recencyDecay * historyBoost, 0.25m);
+    }
+
+    bool DetectReturnerPattern(List<string> sortedMonths)
+    {
+        if (sortedMonths.Count < 3) return false;
+
+        var monthDates = sortedMonths
+            .Select(m => DateTime.ParseExact(m, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture))
+            .ToList();
+
+        int gapCount = 0;
+        int streakStartCount = 0;
+        bool inStreak = true;
+
+        for (int i = 1; i < monthDates.Count; i++)
+        {
+            var diff = ((monthDates[i].Year - monthDates[i - 1].Year) * 12) + monthDates[i].Month - monthDates[i - 1].Month;
+
+            if (diff <= 2)
+            {
+                if (!inStreak)
+                {
+                    streakStartCount++;
+                    inStreak = true;
+                }
+            }
+            else
+            {
+                if (inStreak)
+                {
+                    gapCount++;
+                    inStreak = false;
+                }
+            }
+        }
+
+        return streakStartCount >= 2 && gapCount >= 1;
+    }
+
+    decimal GetSubscriptionProjectionMonthly(DateTime asOfDate, bool filterBySelection = true)
+    {
+        decimal total = 0;
+        foreach (var kvp in CompanyAnalyses)
+        {
+            if (filterBySelection && (!CompanySelected.ContainsKey(kvp.Key) || !CompanySelected[kvp.Key])) continue;
+
+            if (CancellationDates.TryGetValue(kvp.Key, out var cancelDate) && asOfDate >= cancelDate)
+                continue;
+
+            var analysis = kvp.Value;
+            if (analysis.Behavior == CompanyBehavior.ActiveSubscription)
+                total += analysis.TypicalAmount;
+            else if (analysis.Behavior == CompanyBehavior.RecurringReturner)
+                total += analysis.TypicalAmount * analysis.ProjectionWeight;
+        }
+        return total;
+    }
+
+    bool IsSubscriptionCompany(string company)
+    {
+        if (!CompanyAnalyses.ContainsKey(company)) return false;
+        var behavior = CompanyAnalyses[company].Behavior;
+        return behavior == CompanyBehavior.ActiveSubscription
+            || behavior == CompanyBehavior.RecurringReturner;
+    }
+
     void Recalculate()
     {
         HistoricalBuckets.Clear();
@@ -409,13 +841,19 @@ else
         ProjectedLinePath = "";
         HistoricalAreaPath = "";
         ProjectedAreaPath = "";
+        ExclusionLinePath = "";
+        ExclusionAreaPath = "";
+        ExclusionPoints.Clear();
+        ExclusionBuckets.Clear();
         DividerX = 0;
         AvgPerPeriod = 0;
         ProjectedTotal = 0;
         HoveredPointIndex = null;
         PinnedPointIndex = null;
+        HoveredExclusionIndex = null;
+        PinnedExclusionIndex = null;
 
-        var txs = FilteredTransactions.ToList();
+        var txs = AllTransactions.Where(t => t.Amount < 0).ToList();
         if (txs.Count == 0) return;
 
         var grouped = txs
@@ -429,30 +867,153 @@ else
         HistoricalBuckets = grouped;
         AvgPerPeriod = grouped.Average(b => b.Value);
 
-        double sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-        int n = grouped.Count;
-        for (int i = 0; i < n; i++)
+        var lastDate = txs.Max(t => t.Date);
+
+        var monthlyBuckets = txs
+            .GroupBy(t => t.Date.ToString("yyyy-MM"))
+            .OrderBy(g => g.Key)
+            .Select(g => g.Sum(t => t.Amount))
+            .ToList();
+
+        int nm = monthlyBuckets.Count;
+
+        double monthlySlope = 0;
+        double monthlyIntercept = 0;
+        if (nm > 1)
         {
-            double x = i;
-            double y = (double)grouped[i].Value;
-            sumX += x; sumY += y; sumXY += x * y; sumXX += x * x;
+            double sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+            for (int i = 0; i < nm; i++)
+            {
+                double x = i;
+                double y = (double)monthlyBuckets[i];
+                sumX += x; sumY += y; sumXY += x * y; sumXX += x * x;
+            }
+            monthlySlope = (nm * sumXY - sumX * sumY) / (nm * sumXX - sumX * sumX);
+            monthlyIntercept = (sumY - monthlySlope * sumX) / nm;
+        }
+        else if (nm == 1)
+        {
+            monthlyIntercept = (double)monthlyBuckets[0];
         }
 
-        double slope = n > 1 ? (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX) : 0;
-        double intercept = (sumY - slope * sumX) / n;
-
-        var lastKey = txs.Max(t => t.Date);
-        for (int i = 1; i <= PeriodsAhead; i++)
+        if (SelectedMode == "smart")
         {
-            var futureDate = SelectedInterval switch
+            var irregularTxs = txs.Where(t =>
             {
-                "week" => lastKey.AddDays(7 * i),
-                "year" => lastKey.AddYears(i),
-                _ => lastKey.AddMonths(i)
-            };
-            var projectedValue = (decimal)(intercept + slope * (n - 1 + i));
-            if (projectedValue > 0) projectedValue = 0;
-            ProjectedBuckets.Add((BucketLabel(BucketKey(futureDate)), projectedValue));
+                if (!CompanyAnalyses.ContainsKey(t.Company)) return true;
+                var b = CompanyAnalyses[t.Company].Behavior;
+                return b == CompanyBehavior.Irregular;
+            }).ToList();
+
+            var irregularMonthly = irregularTxs
+                .GroupBy(t => t.Date.ToString("yyyy-MM"))
+                .OrderBy(g => g.Key)
+                .Select(g => g.Sum(t => t.Amount))
+                .ToList();
+
+            int ni = irregularMonthly.Count;
+            double irregSlope = 0;
+            double irregIntercept = 0;
+            if (ni > 1)
+            {
+                double sX = 0, sY = 0, sXY = 0, sXX = 0;
+                for (int i = 0; i < ni; i++)
+                {
+                    double x = i;
+                    double y = (double)irregularMonthly[i];
+                    sX += x; sY += y; sXY += x * y; sXX += x * x;
+                }
+                irregSlope = (ni * sXY - sX * sY) / (ni * sXX - sX * sX);
+                irregIntercept = (sY - irregSlope * sX) / ni;
+            }
+            else if (ni == 1)
+            {
+                irregIntercept = (double)irregularMonthly[0];
+            }
+
+            for (int i = 1; i <= PeriodsAhead; i++)
+            {
+                var futureDate = SelectedInterval switch
+                {
+                    "week" => lastDate.AddDays(7 * i),
+                    "year" => lastDate.AddYears(i),
+                    _ => lastDate.AddMonths(i)
+                };
+
+                decimal projectedValue;
+                if (SelectedInterval == "year")
+                {
+                    decimal yearTotal = 0;
+                    for (int m = 0; m < 12; m++)
+                    {
+                        var monthDate = futureDate.AddMonths(m - 11);
+                        decimal subMonth = GetSubscriptionProjectionMonthly(monthDate, filterBySelection: false);
+                        int monthIdx = ni + ((i - 1) * 12) + m;
+                        decimal irregMonth = (decimal)(irregIntercept + irregSlope * monthIdx);
+                        if (irregMonth > 0) irregMonth = 0;
+                        yearTotal += subMonth + irregMonth;
+                    }
+                    projectedValue = yearTotal;
+                }
+                else if (SelectedInterval == "week")
+                {
+                    decimal subWeek = GetSubscriptionProjectionMonthly(futureDate, filterBySelection: false);
+                    double monthsFwd = i / 4.33;
+                    int monthIdx = ni + (int)Math.Floor(monthsFwd);
+                    decimal irregMonth = (decimal)(irregIntercept + irregSlope * monthIdx);
+                    if (irregMonth > 0) irregMonth = 0;
+                    projectedValue = (subWeek + irregMonth) / 4.33m;
+                }
+                else
+                {
+                    decimal subMonth = GetSubscriptionProjectionMonthly(futureDate, filterBySelection: false);
+                    int monthIdx = ni + i - 1;
+                    decimal irregMonth = (decimal)(irregIntercept + irregSlope * monthIdx);
+                    if (irregMonth > 0) irregMonth = 0;
+                    projectedValue = subMonth + irregMonth;
+                }
+
+                if (projectedValue > 0) projectedValue = 0;
+                ProjectedBuckets.Add((BucketLabel(BucketKey(futureDate)), projectedValue));
+            }
+        }
+        else
+        {
+            for (int i = 1; i <= PeriodsAhead; i++)
+            {
+                var futureDate = SelectedInterval switch
+                {
+                    "week" => lastDate.AddDays(7 * i),
+                    "year" => lastDate.AddYears(i),
+                    _ => lastDate.AddMonths(i)
+                };
+
+                decimal projectedValue;
+                if (SelectedInterval == "year")
+                {
+                    decimal yearTotal = 0;
+                    for (int m = 0; m < 12; m++)
+                    {
+                        int monthIdx = nm + ((i - 1) * 12) + m;
+                        yearTotal += (decimal)(monthlyIntercept + monthlySlope * monthIdx);
+                    }
+                    projectedValue = yearTotal;
+                }
+                else if (SelectedInterval == "week")
+                {
+                    double monthsFwd = i / 4.33;
+                    int monthIdx = nm + (int)Math.Floor(monthsFwd);
+                    projectedValue = (decimal)(monthlyIntercept + monthlySlope * monthIdx) / 4.33m;
+                }
+                else
+                {
+                    int monthIdx = nm + i - 1;
+                    projectedValue = (decimal)(monthlyIntercept + monthlySlope * monthIdx);
+                }
+
+                if (projectedValue > 0) projectedValue = 0;
+                ProjectedBuckets.Add((BucketLabel(BucketKey(futureDate)), projectedValue));
+            }
         }
 
         ProjectedTotal = ProjectedBuckets.Sum(b => b.Value);
@@ -508,11 +1069,15 @@ else
         ProjectedAreaPath = BuildAreaPath(projLine, baseY);
 
         int gridCount = 5;
-        for (int i = 0; i <= gridCount; i++)
+        decimal niceStep = NiceGridStep(range, gridCount);
+        decimal gridStart = Math.Floor(minVal / niceStep) * niceStep;
+        decimal gridEnd = Math.Ceiling(maxVal / niceStep) * niceStep;
+
+        for (decimal val = gridStart; val <= gridEnd; val += niceStep)
         {
-            decimal val = minVal + range * i / gridCount;
             double y = MapY(val);
-            GridLines.Add((y, FormatAmount(val)));
+            if (y >= ChartPadTop - 5 && y <= ChartHeight - ChartPadBottom + 5)
+                GridLines.Add((y, FormatAmount(val)));
         }
 
         int labelStep = Math.Max(1, totalPoints / 8);
@@ -523,6 +1088,95 @@ else
         if (totalPoints > 1 && (totalPoints - 1) % labelStep != 0)
         {
             XLabels.Add((MapX(totalPoints - 1), allBuckets[^1].Label));
+        }
+
+        bool hasDeselected = CompanySelected.Any(kvp => !kvp.Value);
+        if (hasDeselected && HistoricalBuckets.Count > 0)
+        {
+            var allSelectedTxs = AllTransactions.Where(t => t.Amount < 0 && CompanySelected.ContainsKey(t.Company) && CompanySelected[t.Company]).ToList();
+
+            var historicalBucketKeys = txs
+                .GroupBy(t => BucketKey(t.Date))
+                .OrderBy(g => g.Key)
+                .Select(g => g.Key)
+                .ToList();
+
+            var selectedByBucket = allSelectedTxs
+                .GroupBy(t => BucketKey(t.Date))
+                .ToDictionary(g => g.Key, g => g.Sum(t => t.Amount));
+
+            var exclHistorical = historicalBucketKeys
+                .Select(key => selectedByBucket.TryGetValue(key, out var val) ? val : 0m)
+                .ToList();
+
+            var exclMonthly = allSelectedTxs
+                .GroupBy(t => t.Date.ToString("yyyy-MM"))
+                .OrderBy(g => g.Key)
+                .Select(g => g.Sum(t => t.Amount))
+                .ToList();
+
+            int enm = exclMonthly.Count;
+            double exSlope = 0, exIntercept = 0;
+            if (enm > 1)
+            {
+                double sX = 0, sY = 0, sXY = 0, sXX = 0;
+                for (int i = 0; i < enm; i++)
+                {
+                    double x = i; double y = (double)exclMonthly[i];
+                    sX += x; sY += y; sXY += x * y; sXX += x * x;
+                }
+                exSlope = (enm * sXY - sX * sY) / (enm * sXX - sX * sX);
+                exIntercept = (sY - exSlope * sX) / enm;
+            }
+            else if (enm == 1)
+            {
+                exIntercept = (double)exclMonthly[0];
+            }
+
+            var exclProjected = new List<decimal>();
+            for (int i = 1; i <= PeriodsAhead; i++)
+            {
+                decimal pv;
+                if (SelectedInterval == "year")
+                {
+                    decimal yt = 0;
+                    for (int m = 0; m < 12; m++)
+                    {
+                        int mi = enm + ((i - 1) * 12) + m;
+                        yt += (decimal)(exIntercept + exSlope * mi);
+                    }
+                    pv = yt;
+                }
+                else if (SelectedInterval == "week")
+                {
+                    int mi = enm + (int)Math.Floor(i / 4.33);
+                    pv = (decimal)(exIntercept + exSlope * mi) / 4.33m;
+                }
+                else
+                {
+                    int mi = enm + i - 1;
+                    pv = (decimal)(exIntercept + exSlope * mi);
+                }
+                if (pv > 0) pv = 0;
+                exclProjected.Add(pv);
+            }
+
+            for (int i = 0; i < exclHistorical.Count && i < HistoricalBuckets.Count; i++)
+                ExclusionBuckets.Add((HistoricalBuckets[i].Label, exclHistorical[i]));
+            for (int i = 0; i < exclProjected.Count && i < ProjectedBuckets.Count; i++)
+                ExclusionBuckets.Add((ProjectedBuckets[i].Label, exclProjected[i]));
+
+            var exclAll = exclHistorical.Concat(exclProjected).ToList();
+
+            for (int i = 0; i < exclAll.Count && i < totalPoints; i++)
+                ExclusionPoints.Add((MapX(i), MapY(exclAll[i])));
+
+            ExclusionLinePath = BuildLinePath(ExclusionPoints);
+
+            double exBaseY = MapY(0) < ChartPadTop ? ChartHeight - ChartPadBottom :
+                             MapY(0) > ChartHeight - ChartPadBottom ? ChartHeight - ChartPadBottom :
+                             MapY(0);
+            ExclusionAreaPath = BuildAreaPath(ExclusionPoints, exBaseY);
         }
     }
 
@@ -549,6 +1203,23 @@ else
                 return dt.ToString("MMM yy");
         }
         return key;
+    }
+
+    static decimal NiceGridStep(decimal range, int targetLines)
+    {
+        if (range <= 0) return 1;
+        double rough = (double)range / targetLines;
+        double magnitude = Math.Pow(10, Math.Floor(Math.Log10(rough)));
+        double normalized = rough / magnitude;
+
+        double nice;
+        if (normalized <= 1) nice = 1;
+        else if (normalized <= 2) nice = 2;
+        else if (normalized <= 2.5) nice = 2.5;
+        else if (normalized <= 5) nice = 5;
+        else nice = 10;
+
+        return (decimal)(nice * magnitude);
     }
 
     static string FormatAmount(decimal val)
@@ -581,7 +1252,7 @@ else
 
     static string P(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
-    void RenderChart() { /* triggers Recalculate if needed */ }
+    void RenderChart() { }
 
 
     void LoadTransactionsFromCsv()
@@ -755,6 +1426,57 @@ else
         flex-wrap: wrap;
     }
 
+    .mode-row {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        margin-top: .75rem;
+        padding-top: .75rem;
+        border-top: 1px solid rgba(255,255,255,.06);
+        flex-wrap: wrap;
+    }
+
+    .mode-btn svg {
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .mode-hint {
+        font-size: .8rem;
+        color: #666;
+        margin-left: .25rem;
+    }
+
+    .card-head-pills {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        flex-wrap: wrap;
+    }
+
+    .mode-pill {
+        font-size: .75rem;
+        padding: .12rem .5rem;
+        border-radius: 999px;
+    }
+
+    .mode-pill.all {
+        background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,.1);
+        color: #ccc;
+    }
+
+    .mode-pill.smart {
+        background: #1a2e1a;
+        border: 1px solid rgba(92,224,122,.2);
+        color: #5ce07a;
+    }
+
     .controls-left {
         display: flex;
         align-items: center;
@@ -819,11 +1541,6 @@ else
         stroke-width: 2;
         stroke-linecap: round;
         stroke-linejoin: round;
-    }
-
-    .input-warning {
-        font-size: .8rem;
-        color: #eaa;
     }
 
     .range-value {
@@ -923,6 +1640,17 @@ else
         display: flex;
         align-items: center;
         gap: .4rem;
+        cursor: pointer;
+        user-select: none;
+        transition: opacity .2s ease;
+    }
+
+    .legend-item.inactive {
+        opacity: .4;
+    }
+
+    .legend-dot.inactive {
+        opacity: .4;
     }
 
     .legend-dot {
@@ -1149,5 +1877,301 @@ else
 
     .summary-value.muted {
         color: #ccc
+    }
+
+    .profile-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: 1px solid rgba(255,255,255,.08);
+        border-radius: 8px;
+        padding: .3rem;
+        cursor: pointer;
+        transition: background .2s ease, border-color .2s ease;
+        flex: 0 0 auto;
+    }
+
+    .profile-btn:hover {
+        background: rgba(122,162,247,.15);
+        border-color: rgba(122,162,247,.3);
+    }
+
+    .profile-btn svg {
+        width: 14px;
+        height: 14px;
+        stroke: #7aa2f7;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .cancel-badge {
+        font-size: .7rem;
+        padding: .1rem .4rem;
+        border-radius: 999px;
+        background: rgba(224,92,92,.15);
+        border: 1px solid rgba(224,92,92,.25);
+        color: #e05c5c;
+        white-space: nowrap;
+        flex: 0 0 auto;
+    }
+
+    .exclusion-dot {
+        background: #e0a93e;
+    }
+
+    .sub-indicator {
+        color: #5ce07a;
+        font-size: .6rem;
+        margin-left: .25rem;
+        vertical-align: middle;
+    }
+
+    .mode-pill.subonly {
+        background: #2e2a1a;
+        border: 1px solid rgba(224,169,62,.2);
+        color: #e0a93e;
+    }
+
+    .profile-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.6);
+        z-index: 200;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding: 2rem;
+        overflow: auto;
+    }
+
+    .profile-panel {
+        width: 100%;
+        max-width: 800px;
+        background: #0f0f0f;
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 18px;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .profile-header {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        flex-wrap: wrap;
+    }
+
+    .back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        padding: .45rem .75rem;
+        border-radius: 12px;
+        background: #141414;
+        border: 1px solid rgba(255,255,255,.08);
+        color: #ccc;
+        cursor: pointer;
+        transition: background .2s ease, transform .2s ease, color .2s ease;
+        font-size: .9rem;
+    }
+
+    .back-btn svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .back-btn:hover {
+        background: #1c1c1c;
+        color: #fff;
+        transform: translateY(-1px);
+    }
+
+    .profile-title {
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: #fff;
+    }
+
+    .behavior-pill {
+        font-size: .75rem;
+        padding: .15rem .55rem;
+        border-radius: 999px;
+    }
+
+    .behavior-pill.activesubscription {
+        background: #1a2e1a;
+        border: 1px solid rgba(92,224,122,.2);
+        color: #5ce07a;
+    }
+
+    .behavior-pill.recurringreturner {
+        background: #2e2a1a;
+        border: 1px solid rgba(224,200,92,.2);
+        color: #e0c85c;
+    }
+
+    .behavior-pill.cancelledsubscription {
+        background: #2e1a1a;
+        border: 1px solid rgba(224,92,92,.2);
+        color: #e05c5c;
+    }
+
+    .behavior-pill.oneoff, .behavior-pill.irregular {
+        background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,.1);
+        color: #999;
+    }
+
+    .profile-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: .75rem;
+    }
+
+    @@media (max-width: 600px) {
+        .profile-stats {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    .stat-card {
+        display: flex;
+        flex-direction: column;
+        gap: .25rem;
+        padding: .75rem 1rem;
+        background: #111;
+        border: 1px solid rgba(255,255,255,.08);
+        border-radius: 12px;
+    }
+
+    .stat-label {
+        font-size: .8rem;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .stat-value {
+        font-size: 1.15rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        font-family: ui-monospace, monospace;
+        color: #f3f3f3;
+    }
+
+    .cancel-card {
+        background: #111;
+    }
+
+    .cancel-info {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        color: #e05c5c;
+        font-size: .9rem;
+        flex-wrap: wrap;
+    }
+
+    .cancel-remove {
+        color: #e05c5c !important;
+        border-color: rgba(224,92,92,.2) !important;
+    }
+
+    .cancel-remove:hover {
+        background: rgba(224,92,92,.15) !important;
+    }
+
+    .cancel-form {
+        display: flex;
+        flex-direction: column;
+        gap: .6rem;
+    }
+
+    .cancel-label {
+        font-size: .85rem;
+        color: #aaa;
+    }
+
+    .cancel-input-row {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        flex-wrap: wrap;
+    }
+
+    .cancel-date-input {
+        padding: .45rem .6rem;
+        border-radius: 10px;
+        background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,.12);
+        color: #f3f3f3;
+        font-size: .9rem;
+        outline: none;
+        transition: border-color .2s ease;
+        color-scheme: dark;
+    }
+
+    .cancel-date-input:focus {
+        border-color: rgba(122,162,247,.5);
+    }
+
+    .profile-tx-card {
+        max-height: 40vh;
+        overflow: auto;
+    }
+
+    .table-container {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .profile-panel table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 480px;
+    }
+
+    .profile-panel th, .profile-panel td {
+        padding: .6rem;
+        border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+
+    .profile-panel th {
+        text-align: left;
+        color: #bbb;
+        font-size: .85rem;
+    }
+
+    .profile-panel tbody tr:hover td {
+        background: #1a1a1a;
+    }
+
+    .profile-panel .mono {
+        color: #e0e0e0;
+    }
+
+    .profile-panel .muted {
+        color: #bbb;
+    }
+
+    .pill.payment {
+        background: #1a1a2e;
+        border-color: rgba(122,162,247,.2);
+        color: #7aa2f7;
+        font-size: .85em;
+    }
+
+    .positive {
+        color: #5ce07a !important;
     }
 </style>

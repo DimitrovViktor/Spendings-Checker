@@ -193,29 +193,47 @@ else
     void DetectSubscriptions()
     {
         var groups = AllTransactions
+            .Where(t => t.Amount < 0)
             .GroupBy(t => t.Company, StringComparer.OrdinalIgnoreCase)
             .Where(g =>
             {
                 var distinctDates = g.Select(t => t.Date.Date).Distinct().ToList();
-                return distinctDates.Count >= 2;
+                return distinctDates.Count >= 3;
             });
 
         foreach (var g in groups)
         {
             var distinctDates = g.Select(t => t.Date.Date).Distinct().OrderBy(d => d).ToList();
+
+            var gaps = new List<double>();
+            for (int i = 1; i < distinctDates.Count; i++)
+                gaps.Add((distinctDates[i] - distinctDates[i - 1]).TotalDays);
+
+            var medianGap = gaps.OrderBy(x => x).ElementAt(gaps.Count / 2);
+            if (medianGap > 40) continue;
+
+            var amounts = g.Select(t => Math.Abs(t.Amount)).ToList();
+            var amountGroups = g
+                .GroupBy(t => Math.Round(t.Amount, 0))
+                .OrderByDescending(x => x.Count())
+                .ToList();
+
+            var mostCommonGroup = amountGroups.First();
+            decimal consistencyRatio = (decimal)mostCommonGroup.Count() / g.Count();
+
+            if (consistencyRatio < 0.4m)
+            {
+                var minAmount = amounts.Min();
+                var maxAmount = amounts.Max();
+                if (maxAmount > 0 && (maxAmount / minAmount) > 3m) continue;
+            }
+
             var cycle = DetectCycle(distinctDates);
             var last = distinctDates.Last();
 
-            var typicalAmount = g
-                .Where(t => t.Amount < 0)
-                .GroupBy(t => Math.Round(t.Amount, 2))
-                .OrderByDescending(x => x.Count())
-                .FirstOrDefault()?.Key;
+            var typicalAmount = mostCommonGroup.Key;
 
-            if (typicalAmount is null)
-                typicalAmount = Math.Round(g.Average(t => t.Amount), 2);
-
-            Subs.Add(new Sub(g.Key, cycle, typicalAmount.Value, last));
+            Subs.Add(new Sub(g.Key, cycle, typicalAmount, last));
         }
 
         Subs.Sort((a, b) => string.Compare(a.Company, b.Company, StringComparison.OrdinalIgnoreCase));
@@ -360,8 +378,8 @@ else
 
         var amountStr = fields[map.AmountIndex].Trim()
             .Replace("$", "")
-            .Replace("£", "")
-            .Replace("€", "")
+            .Replace("Â£", "")
+            .Replace("â‚¬", "")
             .Replace(",", "");
 
         if (!decimal.TryParse(amountStr, out var amount))
