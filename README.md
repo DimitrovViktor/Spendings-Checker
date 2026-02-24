@@ -18,9 +18,12 @@ Transactions are taken from CSV files and listed along with total amounts of spe
 
 ## Subscriptions Page
 
+Transaction info is taken from CSF files and recurring payments are marked as subscriptions, each company has a profile with details for all recurring payments.
+
 ## Projections Page
+
+Predictions are displayed based on info from CSV files. Projections show how much money the user may spend in the future if they continue to spend in the same patterns.
 
 ## TO-DO:
 
-- Subscriptions page - table of recurring transactions in CSV, table of companies, active/inactive subscription indicators
-- Projections page - total estimated future spendings, estimated future subscription spendings
+- Projections page - estimated future subscription spendings
