@@ -23,5 +23,10 @@ Predictions are displayed based on info from CSV files. Projections show how muc
 
 ## TO-DO:
 
-- Settings page - date formats, currency selection, etc.
+- Settings (inside of existing pages) - date formats, currency selection, etc.
 - Subscription only projections
+  
+## Potential Future Work
+
+- Currency conversion - set a main currency(user's choice) and convert all transactions into that currency
+- Planned spendings - add planned/scheduled purchases(e.g. user wants to buy something) to future estimations
