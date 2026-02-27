@@ -50,7 +50,7 @@
                                 <tr class="clickable-row" @onclick="() => SelectCompany(s.Company)">
                                     <td><span class="pill company">@s.Company</span></td>
                                     <td class="muted">@s.Cycle</td>
-                                    <td class="r mono @(s.Amount < 0 ? "amount-negative" : "amount-positive")">@s.Amount.ToString("0.00")</td>
+                                    <td class="r mono @(s.Amount < 0 ? "amount-negative" : "amount-positive")">@FormatConverted(s.Amount, s.Currency)</td>
                                     <td class="mono date">@s.Last.ToString("yyyy-MM-dd")</td>
                                 </tr>
                             }
@@ -66,7 +66,10 @@
                 <ul class="companies">
                     @foreach (var s in Subs)
                     {
-                        <li @onclick="() => SelectCompany(s.Company)">@s.Company</li>
+                        <li @onclick="() => SelectCompany(s.Company)">
+                            @s.Company
+                            <span class="currency-tag">@MainCurrency</span>
+                        </li>
                     }
                 </ul>
             </div>
@@ -81,15 +84,16 @@ else
         .ToList();
 
     var monthsActive = txs.Select(t => new { t.Date.Year, t.Date.Month }).Distinct().Count();
-    var totalSpent = txs.Where(t => t.Amount < 0).Sum(t => t.Amount);
+    var totalSpent = txs.Where(t => t.Amount < 0).Sum(t => ConvertToMain(t.Amount, t.Currency));
     var avgPerMonth = monthsActive > 0 ? totalSpent / monthsActive : 0m;
 
     <div class="back-bar">
         <button class="back-btn" @onclick="ClearSelection">
-            <svg viewBox="0 0 24 24"><path d="M19 12H5M5 12l7-7M5 12l7 7"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M19 12H5M5 12l7-7M5 12l7 7" /></svg>
             Back
         </button>
         <span class="company-title">@SelectedCompany</span>
+        <span class="pill currency-pill">@MainCurrency</span>
     </div>
 
     <div class="profile-grid">
@@ -103,11 +107,11 @@ else
         </div>
         <div class="stat-card">
             <span class="stat-label">Total Spent</span>
-            <span class="stat-value amount-negative">@totalSpent.ToString("0.00")</span>
+            <span class="stat-value amount-negative">@FormatInMain(totalSpent)</span>
         </div>
         <div class="stat-card">
             <span class="stat-label">Avg / Month</span>
-            <span class="stat-value amount-negative">@avgPerMonth.ToString("0.00")</span>
+            <span class="stat-value amount-negative">@FormatInMain(avgPerMonth)</span>
         </div>
     </div>
 
@@ -123,6 +127,7 @@ else
                         <th>Date</th>
                         <th>Description</th>
                         <th>Payment</th>
+                        <th>Account</th>
                         <th class="r">Amount</th>
                     </tr>
                 </thead>
@@ -138,7 +143,8 @@ else
                                     <span class="pill payment">@t.PaymentMethod</span>
                                 }
                             </td>
-                            <td class="r mono @(t.Amount < 0 ? "amount-negative" : "amount-positive")">@t.Amount.ToString("0.00")</td>
+                            <td><span class="pill account-pill">@t.AccountName</span></td>
+                            <td class="r mono @(t.Amount < 0 ? "amount-negative" : "amount-positive")">@FormatConverted(t.Amount, t.Currency)</td>
                         </tr>
                     }
                 </tbody>
@@ -148,8 +154,8 @@ else
 }
 
 @code {
-    record Tx(DateTime Date, string Company, string Description, string? PaymentMethod, decimal Amount);
-    record Sub(string Company, string Cycle, decimal Amount, DateTime Last);
+    record Tx(DateTime Date, string Company, string Description, string? PaymentMethod, decimal Amount, string Currency, string AccountId, string AccountName);
+    record Sub(string Company, string Cycle, decimal Amount, DateTime Last, string Currency);
 
     readonly List<Tx> AllTransactions = new();
     readonly List<Sub> Subs = new();
@@ -157,13 +163,122 @@ else
     string? SelectedCompany;
     string? ErrorMessage;
 
+    string MainCurrency = "EUR";
+    readonly Dictionary<string, decimal> CurrencyRates = new()
+    {
+        ["EUR"] = 1m, ["GBP"] = 1.18m, ["USD"] = 0.92m, ["JPY"] = 0.006m, ["CHF"] = 1.06m
+    };
+
+    static readonly Dictionary<string, string> CurrencySymbolMap = new()
+    {
+        ["GBP"] = "£", ["USD"] = "$", ["EUR"] = "€", ["JPY"] = "¥", ["CHF"] = "CHF "
+    };
+
+    string MainCurrencySymbol => CurrencySymbolMap.GetValueOrDefault(MainCurrency, "");
+
+    decimal ConvertToMain(decimal amount, string fromCurrency)
+    {
+        if (fromCurrency == MainCurrency) return amount;
+        var fromRate = CurrencyRates.GetValueOrDefault(fromCurrency, 1m);
+        var mainRate = CurrencyRates.GetValueOrDefault(MainCurrency, 1m);
+        if (mainRate == 0) mainRate = 1m;
+        return amount * fromRate / mainRate;
+    }
+
+    string FormatConverted(decimal amount, string fromCurrency)
+    {
+        var converted = ConvertToMain(amount, fromCurrency);
+        var symbol = MainCurrencySymbol;
+        var abs = Math.Abs(converted).ToString("0.00");
+        return converted < 0 ? $"-{symbol}{abs}" : $"{symbol}{abs}";
+    }
+
+    string FormatInMain(decimal alreadyConverted)
+    {
+        var symbol = MainCurrencySymbol;
+        var abs = Math.Abs(alreadyConverted).ToString("0.00");
+        return alreadyConverted < 0 ? $"-{symbol}{abs}" : $"{symbol}{abs}";
+    }
+
     protected override void OnInitialized()
     {
+        LoadCurrencySettings();
         LoadData();
+    }
+
+    void LoadCurrencySettings()
+    {
+        var settingsPath = Path.Combine(Env.ContentRootPath, "App_Data", "settings.meta");
+        if (!File.Exists(settingsPath)) return;
+
+        foreach (var line in File.ReadAllLines(settingsPath))
+        {
+            var sep = line.IndexOf('=');
+            if (sep < 0) continue;
+            var key = line[..sep].Trim();
+            var val = line[(sep + 1)..].Trim();
+
+            if (key == "maincurrency")
+            {
+                MainCurrency = val;
+            }
+            else if (key.StartsWith("rate_"))
+            {
+                var cur = key[5..];
+                if (decimal.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var rate))
+                {
+                    CurrencyRates[cur] = rate;
+                }
+            }
+        }
     }
 
     void SelectCompany(string company) => SelectedCompany = company;
     void ClearSelection() => SelectedCompany = null;
+
+    record AccountMeta(string Id, string Name, string Currency, string DateFormat, bool HasCustomMapping, int DateIndex, int AmountIndex, int MemoIndex, int CategoryIndex);
+
+    List<AccountMeta> LoadAccountMetas()
+    {
+        var result = new List<AccountMeta>();
+        var baseDir = Path.Combine(Env.ContentRootPath, "App_Data", "accounts");
+        if (!Directory.Exists(baseDir)) return result;
+
+        foreach (var dir in Directory.GetDirectories(baseDir))
+        {
+            var metaPath = Path.Combine(dir, "account.meta");
+            if (!File.Exists(metaPath)) continue;
+
+            var id = Path.GetFileName(dir);
+            string name = id, currency = "GBP", dateFormat = "dd/MM/yyyy";
+            bool hasMapping = false;
+            int di = -1, ai = -1, mi = -1, ci = -1;
+
+            foreach (var line in File.ReadAllLines(metaPath))
+            {
+                var sep = line.IndexOf('=');
+                if (sep < 0) continue;
+                var key = line[..sep].Trim();
+                var val = line[(sep + 1)..].Trim();
+
+                switch (key)
+                {
+                    case "name": name = val; break;
+                    case "currency": currency = val; break;
+                    case "dateformat": dateFormat = val; break;
+                    case "hasmapping": hasMapping = val == "true"; break;
+                    case "dateindex": int.TryParse(val, out di); break;
+                    case "amountindex": int.TryParse(val, out ai); break;
+                    case "memoindex": int.TryParse(val, out mi); break;
+                    case "categoryindex": int.TryParse(val, out ci); break;
+                }
+            }
+
+            result.Add(new AccountMeta(id, name, currency, dateFormat, hasMapping, di, ai, mi, ci));
+        }
+
+        return result;
+    }
 
     void LoadData()
     {
@@ -171,19 +286,17 @@ else
         Subs.Clear();
         ErrorMessage = null;
 
-        var dir = Path.Combine(Env.ContentRootPath, "App_Data", "uploads");
-        if (!Directory.Exists(dir))
-            return;
+        var accounts = LoadAccountMetas();
 
-        foreach (var filePath in Directory.GetFiles(dir, "*.csv"))
+        foreach (var acct in accounts)
         {
-            try
+            var dir = Path.Combine(Env.ContentRootPath, "App_Data", "accounts", acct.Id);
+            if (!Directory.Exists(dir)) continue;
+
+            foreach (var filePath in Directory.GetFiles(dir, "*.csv"))
             {
-                ParseCsvFile(filePath);
-            }
-            catch (Exception ex)
-            {
-                ErrorMessage = $"Error reading {Path.GetFileName(filePath)}: {ex.Message}";
+                try { ParseCsvFile(filePath, acct); }
+                catch (Exception ex) { ErrorMessage = $"Error reading {Path.GetFileName(filePath)}: {ex.Message}"; }
             }
         }
 
@@ -230,10 +343,10 @@ else
 
             var cycle = DetectCycle(distinctDates);
             var last = distinctDates.Last();
-
             var typicalAmount = mostCommonGroup.Key;
+            var primaryCurrency = g.GroupBy(t => t.Currency).OrderByDescending(x => x.Count()).First().Key;
 
-            Subs.Add(new Sub(g.Key, cycle, typicalAmount, last));
+            Subs.Add(new Sub(g.Key, cycle, typicalAmount, last, primaryCurrency));
         }
 
         Subs.Sort((a, b) => string.Compare(a.Company, b.Company, StringComparison.OrdinalIgnoreCase));
@@ -249,22 +362,37 @@ else
 
         var avg = gaps.Average();
 
-        if (avg <= 2)   return "Daily";
-        if (avg <= 10)  return "Weekly";
-        if (avg <= 20)  return "Bi-Weekly";
-        if (avg <= 45)  return "Monthly";
+        if (avg <= 2) return "Daily";
+        if (avg <= 10) return "Weekly";
+        if (avg <= 20) return "Bi-Weekly";
+        if (avg <= 45) return "Monthly";
         if (avg <= 100) return "Quarterly";
         return "Yearly";
     }
 
-    void ParseCsvFile(string filePath)
+    record ColumnMap(int DateIndex, int AmountIndex, int MemoIndex, int SubcategoryIndex);
+
+    void ParseCsvFile(string filePath, AccountMeta acct)
     {
         var lines = File.ReadAllLines(filePath);
-        if (lines.Length < 2)
-            return;
+        if (lines.Length < 2) return;
 
         var headerFields = ParseCsvLine(lines[0]);
-        var columnMap = DetectColumns(headerFields);
+        ColumnMap columnMap;
+
+        if (acct.HasCustomMapping && (acct.DateIndex >= 0 || acct.AmountIndex >= 0))
+        {
+            columnMap = new ColumnMap(
+                acct.DateIndex >= 0 ? acct.DateIndex : DetectColumns(headerFields).DateIndex,
+                acct.AmountIndex >= 0 ? acct.AmountIndex : DetectColumns(headerFields).AmountIndex,
+                acct.MemoIndex >= 0 ? acct.MemoIndex : DetectColumns(headerFields).MemoIndex,
+                acct.CategoryIndex >= 0 ? acct.CategoryIndex : DetectColumns(headerFields).SubcategoryIndex
+            );
+        }
+        else
+        {
+            columnMap = DetectColumns(headerFields);
+        }
 
         if (columnMap.DateIndex < 0 || columnMap.AmountIndex < 0)
         {
@@ -274,510 +402,321 @@ else
 
         for (var i = 1; i < lines.Length; i++)
         {
-            var line = lines[i];
-            if (string.IsNullOrWhiteSpace(line))
-                continue;
-
-            var tx = ParseLine(line, columnMap);
-            if (tx is not null)
-                AllTransactions.Add(tx);
+            if (string.IsNullOrWhiteSpace(lines[i])) continue;
+            var tx = ParseLine(lines[i], columnMap, acct);
+            if (tx is not null) AllTransactions.Add(tx);
         }
     }
-
-    record ColumnMap(int DateIndex, int AmountIndex, int MemoIndex, int SubcategoryIndex);
 
     static ColumnMap DetectColumns(List<string> headers)
     {
         int dateIdx = -1, amountIdx = -1, memoIdx = -1, subcategoryIdx = -1;
-
         for (var i = 0; i < headers.Count; i++)
         {
             var h = headers[i].Trim().ToLowerInvariant();
-
-            if (dateIdx < 0 && (h == "date" || h == "transaction date" || h == "trans date" || h == "posting date"))
-                dateIdx = i;
-
-            if (amountIdx < 0 && (h == "amount" || h == "debit" || h == "credit" || h == "value" || h == "transaction amount"))
-                amountIdx = i;
-
-            if (memoIdx < 0 && (h == "memo" || h == "description" || h == "narrative" || h == "details" || h == "transaction description" || h == "payee"))
-                memoIdx = i;
-
-            if (subcategoryIdx < 0 && (h == "subcategory" || h == "category" || h == "type"))
-                subcategoryIdx = i;
+            if (dateIdx < 0 && (h == "date" || h == "transaction date" || h == "trans date" || h == "posting date")) dateIdx = i;
+            if (amountIdx < 0 && (h == "amount" || h == "debit" || h == "credit" || h == "value" || h == "transaction amount")) amountIdx = i;
+            if (memoIdx < 0 && (h == "memo" || h == "description" || h == "narrative" || h == "details" || h == "transaction description" || h == "payee")) memoIdx = i;
+            if (subcategoryIdx < 0 && (h == "subcategory" || h == "category" || h == "type")) subcategoryIdx = i;
         }
-
         return new ColumnMap(dateIdx, amountIdx, memoIdx, subcategoryIdx);
     }
 
-    static readonly HashSet<string> PaymentProcessors = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "PAYPAL", "STRIPE", "SQUARE", "KLARNA", "AFTERPAY", "CLEARPAY", "VENMO",
-        "APPLE PAY", "APPLEPAY", "GOOGLE PAY", "GOOGLEPAY", "SAMSUNG PAY",
-        "VISA", "MASTERCARD", "AMEX", "AMERICAN EXPRESS",
-        "REVOLUT", "WISE", "TRANSFERWISE", "SKRILL", "NETELLER",
-        "CASH APP", "CASHAPP", "ZELLE", "WORLDPAY", "ADYEN", "CHECKOUT"
-    };
-
-    static readonly HashSet<string> KnownCompanies = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "NETFLIX", "SPOTIFY", "APPLE", "APPLE MUSIC", "YOUTUBE", "YOUTUBE PREMIUM",
-        "DISNEY", "DISNEY+", "DISNEYPLUS", "HBO", "HBO MAX", "HULU", "PRIME VIDEO",
-        "AMAZON PRIME", "PARAMOUNT", "PEACOCK", "CRUNCHYROLL", "TWITCH", "DAZN",
-        "AMAZON", "EBAY", "ETSY", "ALIEXPRESS", "ALIBABA", "WISH", "SHEIN",
-        "WALMART", "TARGET", "COSTCO", "IKEA", "WAYFAIR", "BEST BUY", "BESTBUY",
-        "HOME DEPOT", "LOWES", "MACYS", "NORDSTROM", "ZARA", "H&M", "HM",
-        "UNIQLO", "GAP", "ASOS", "BOOHOO", "PRIMARK", "NEXT", "MARKS SPENCER",
-        "TESCO", "SAINSBURYS", "ASDA", "MORRISONS", "ALDI", "LIDL", "WAITROSE",
-        "ARGOS", "CURRYS", "JOHN LEWIS", "BOOTS", "SUPERDRUG",
-        "UBER EATS", "UBEREATS", "DELIVEROO", "DOORDASH", "GRUBHUB", "JUST EAT",
-        "JUSTEAT", "POSTMATES", "INSTACART", "GOPUFF",
-        "MCDONALDS", "BURGER KING", "WENDYS", "KFC", "SUBWAY", "DOMINOS",
-        "PIZZA HUT", "PAPA JOHNS", "CHIPOTLE", "TACO BELL", "FIVE GUYS",
-        "NANDOS", "GREGGS", "PRET", "PRET A MANGER", "COSTA", "STARBUCKS",
-        "DUNKIN", "TIM HORTONS", "KRISPY KREME",
-        "GOOGLE", "MICROSOFT", "ADOBE", "DROPBOX", "SLACK", "ZOOM", "NOTION",
-        "GITHUB", "GITLAB", "ATLASSIAN", "JIRA", "CONFLUENCE", "TRELLO",
-        "CANVA", "FIGMA", "SKETCH", "INVISION", "MIRO",
-        "OPENAI", "CHATGPT", "MIDJOURNEY", "ANTHROPIC",
-        "AWS", "AZURE", "DIGITALOCEAN", "HEROKU", "VERCEL", "NETLIFY",
-        "GODADDY", "NAMECHEAP", "CLOUDFLARE", "SQUARESPACE", "WIX", "SHOPIFY",
-        "WORDPRESS", "HOSTINGER", "BLUEHOST", "SITEGROUND",
-        "STEAM", "XBOX", "PLAYSTATION", "NINTENDO", "EPIC GAMES", "EPICGAMES",
-        "RIOT GAMES", "RIOTGAMES", "BLIZZARD", "EA", "ELECTRONIC ARTS", "UBISOFT",
-        "ROBLOX", "MOJANG", "MINECRAFT",
-        "COURSERA", "UDEMY", "SKILLSHARE", "MASTERCLASS", "LINKEDIN LEARNING",
-        "PLURALSIGHT", "CODECADEMY", "TREEHOUSE", "BRILLIANT", "DUOLINGO",
-        "AUDIBLE", "KINDLE", "SCRIBD", "BLINKIST",
-        "UBER", "LYFT", "BOLT", "GRAB", "DIDI", "CABIFY", "FREENOW",
-        "AIRBNB", "BOOKING", "BOOKING.COM", "EXPEDIA", "HOTELS.COM", "TRIVAGO",
-        "SKYSCANNER", "KAYAK", "TRAINLINE", "NATIONAL RAIL", "TFL",
-        "RYANAIR", "EASYJET", "BRITISH AIRWAYS", "DELTA", "UNITED", "SOUTHWEST",
-        "HERTZ", "AVIS", "ENTERPRISE", "SIXT", "EUROPCAR",
-        "PELOTON", "STRAVA", "MYFITNESSPAL", "HEADSPACE", "CALM", "FITBIT",
-        "NIKE", "ADIDAS", "UNDER ARMOUR", "PUMA", "REEBOK", "GYM", "PUREGYM",
-        "DAVID LLOYD", "VIRGIN ACTIVE", "ANYTIME FITNESS", "PLANET FITNESS",
-        "PATREON", "ONLYFANS", "SUBSTACK", "MEDIUM", "GUMROAD",
-        "EXPERIAN", "EQUIFAX", "CREDIT KARMA", "CLEARSCORE",
-        "VODAFONE", "EE", "O2", "THREE", "BT", "SKY", "VIRGIN MEDIA",
-        "VERIZON", "ATT", "T-MOBILE", "SPRINT", "COMCAST", "XFINITY",
-        "BRITISH GAS", "OCTOPUS ENERGY", "BULB", "EON", "EDF", "SSE", "SCOTTISH POWER"
-    };
-
-    Tx? ParseLine(string line, ColumnMap map)
+    Tx? ParseLine(string line, ColumnMap map, AccountMeta acct)
     {
         var fields = ParseCsvLine(line);
-
         var maxRequired = Math.Max(map.DateIndex, Math.Max(map.AmountIndex, Math.Max(map.MemoIndex, map.SubcategoryIndex)));
-        if (fields.Count <= maxRequired)
-            return null;
+        if (fields.Count <= maxRequired) return null;
 
         var dateStr = fields[map.DateIndex].Trim();
-        if (!TryParseDate(dateStr, out var date))
-            return null;
+        if (!TryParseDate(dateStr, acct.DateFormat, out var date)) return null;
 
         var amountStr = fields[map.AmountIndex].Trim()
-            .Replace("$", "")
-            .Replace("Â£", "")
-            .Replace("â‚¬", "")
-            .Replace(",", "");
+            .Replace("$", "").Replace("£", "").Replace("€", "")
+            .Replace("¥", "").Replace(",", "");
+        if (!decimal.TryParse(amountStr, out var amount)) return null;
 
-        if (!decimal.TryParse(amountStr, out var amount))
-            return null;
-
-        var memo = map.MemoIndex >= 0 && map.MemoIndex < fields.Count
-            ? fields[map.MemoIndex].Trim()
-            : "";
-
-        var subcategory = map.SubcategoryIndex >= 0 && map.SubcategoryIndex < fields.Count
-            ? fields[map.SubcategoryIndex].Trim()
-            : "";
+        var memo = map.MemoIndex >= 0 && map.MemoIndex < fields.Count ? fields[map.MemoIndex].Trim() : "";
+        var subcategory = map.SubcategoryIndex >= 0 && map.SubcategoryIndex < fields.Count ? fields[map.SubcategoryIndex].Trim() : "";
 
         var (company, paymentMethod) = ExtractCompanyAndPayment(memo);
-
         if (company == "Unknown" && !string.IsNullOrWhiteSpace(subcategory))
         {
             var (subCompany, _) = ExtractCompanyAndPayment(subcategory);
-            if (subCompany != "Unknown")
-                company = subCompany;
+            if (subCompany != "Unknown") company = subCompany;
         }
 
-        return new Tx(date, company, memo, paymentMethod, amount);
+        return new Tx(date, company, memo, paymentMethod, amount, acct.Currency, acct.Id, acct.Name);
     }
 
-    static (string Company, string? PaymentMethod) ExtractCompanyAndPayment(string memo)
+    static bool TryParseDate(string dateStr, string preferredFormat, out DateTime date)
     {
-        if (string.IsNullOrWhiteSpace(memo))
-            return ("Unknown", null);
+        if (DateTime.TryParseExact(dateStr, preferredFormat, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out date))
+            return true;
 
-        var cleaned = memo
-            .Replace("*", " ")
-            .Replace("#", " ")
-            .Replace("  ", " ")
-            .Trim()
-            .ToUpperInvariant();
+        string[] fallbacks = ["dd/MM/yyyy","MM/dd/yyyy","yyyy-MM-dd","dd-MM-yyyy","MM-dd-yyyy",
+            "d/M/yyyy","M/d/yyyy","dd MMM yyyy","MMM dd, yyyy"];
 
-        string? paymentMethod = null;
-        string? company = null;
-
-        foreach (var processor in PaymentProcessors)
-        {
-            if (cleaned.Contains(processor, StringComparison.OrdinalIgnoreCase))
-            {
-                paymentMethod = FormatName(processor);
-
-                var processorIndex = cleaned.IndexOf(processor, StringComparison.OrdinalIgnoreCase);
-                var afterProcessor = cleaned[(processorIndex + processor.Length)..].Trim();
-
-                company = FindKnownCompany(afterProcessor);
-                if (company != null)
-                    return (company, paymentMethod);
-
-                if (!string.IsNullOrWhiteSpace(afterProcessor))
-                {
-                    var words = afterProcessor.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    if (words.Length > 0)
-                    {
-                        company = FormatName(string.Join(" ", words.Take(2)));
-                        return (company, paymentMethod);
-                    }
-                }
-            }
-        }
-
-        company = FindKnownCompany(cleaned);
-        if (company != null)
-            return (company, null);
-
-        var parts = cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-        string[] skipPrefixes = ["CARD", "PAYMENT", "PURCHASE", "POS", "DEBIT", "CREDIT", "DIRECT", "TRANSFER", "REF", "TO", "FROM"];
-        var meaningfulParts = parts.Where(p => !skipPrefixes.Contains(p) && p.Length > 2).Take(2).ToArray();
-
-        if (meaningfulParts.Length > 0)
-            return (FormatName(string.Join(" ", meaningfulParts)), null);
-
-        return ("Unknown", null);
-    }
-
-    static string? FindKnownCompany(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-
-        foreach (var company in KnownCompanies.OrderByDescending(c => c.Length))
-        {
-            if (text.Contains(company, StringComparison.OrdinalIgnoreCase))
-                return FormatName(company);
-        }
-
-        return null;
-    }
-
-    static string FormatName(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return name;
-
-        return System.Globalization.CultureInfo.CurrentCulture.TextInfo
-            .ToTitleCase(name.ToLowerInvariant());
-    }
-
-    static bool TryParseDate(string dateStr, out DateTime date)
-    {
-        string[] formats = [
-            "dd/MM/yyyy",
-            "MM/dd/yyyy",
-            "yyyy-MM-dd",
-            "dd-MM-yyyy",
-            "MM-dd-yyyy",
-            "d/M/yyyy",
-            "M/d/yyyy",
-            "dd MMM yyyy",
-            "MMM dd, yyyy"
-        ];
-
-        if (DateTime.TryParseExact(dateStr, formats, System.Globalization.CultureInfo.InvariantCulture,
+        if (DateTime.TryParseExact(dateStr, fallbacks, System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.None, out date))
             return true;
 
         return DateTime.TryParse(dateStr, out date);
     }
 
+    static readonly HashSet<string> PaymentProcessors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "PAYPAL","STRIPE","SQUARE","KLARNA","AFTERPAY","CLEARPAY","VENMO",
+        "APPLE PAY","APPLEPAY","GOOGLE PAY","GOOGLEPAY","SAMSUNG PAY",
+        "VISA","MASTERCARD","AMEX","AMERICAN EXPRESS",
+        "REVOLUT","WISE","TRANSFERWISE","SKRILL","NETELLER",
+        "CASH APP","CASHAPP","ZELLE","WORLDPAY","ADYEN","CHECKOUT"
+    };
+
+    static readonly HashSet<string> KnownCompanies = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "NETFLIX","SPOTIFY","APPLE","APPLE MUSIC","YOUTUBE","YOUTUBE PREMIUM",
+        "DISNEY","DISNEY+","DISNEYPLUS","HBO","HBO MAX","HULU","PRIME VIDEO",
+        "AMAZON PRIME","PARAMOUNT","PEACOCK","CRUNCHYROLL","TWITCH","DAZN",
+        "AMAZON","EBAY","ETSY","ALIEXPRESS","ALIBABA","WISH","SHEIN",
+        "WALMART","TARGET","COSTCO","IKEA","WAYFAIR","BEST BUY","BESTBUY",
+        "HOME DEPOT","LOWES","MACYS","NORDSTROM","ZARA","H&M","HM",
+        "UNIQLO","GAP","ASOS","BOOHOO","PRIMARK","NEXT","MARKS SPENCER",
+        "TESCO","SAINSBURYS","ASDA","MORRISONS","ALDI","LIDL","WAITROSE",
+        "ARGOS","CURRYS","JOHN LEWIS","BOOTS","SUPERDRUG",
+        "UBER EATS","UBEREATS","DELIVEROO","DOORDASH","GRUBHUB","JUST EAT",
+        "JUSTEAT","POSTMATES","INSTACART","GOPUFF",
+        "MCDONALDS","BURGER KING","WENDYS","KFC","SUBWAY","DOMINOS",
+        "PIZZA HUT","PAPA JOHNS","CHIPOTLE","TACO BELL","FIVE GUYS",
+        "NANDOS","GREGGS","PRET","PRET A MANGER","COSTA","STARBUCKS",
+        "DUNKIN","TIM HORTONS","KRISPY KREME",
+        "GOOGLE","MICROSOFT","ADOBE","DROPBOX","SLACK","ZOOM","NOTION",
+        "GITHUB","GITLAB","ATLASSIAN","JIRA","CONFLUENCE","TRELLO",
+        "CANVA","FIGMA","SKETCH","INVISION","MIRO",
+        "OPENAI","CHATGPT","MIDJOURNEY","ANTHROPIC",
+        "AWS","AZURE","DIGITALOCEAN","HEROKU","VERCEL","NETLIFY",
+        "GODADDY","NAMECHEAP","CLOUDFLARE","SQUARESPACE","WIX","SHOPIFY",
+        "WORDPRESS","HOSTINGER","BLUEHOST","SITEGROUND",
+        "STEAM","XBOX","PLAYSTATION","NINTENDO","EPIC GAMES","EPICGAMES",
+        "RIOT GAMES","RIOTGAMES","BLIZZARD","EA","ELECTRONIC ARTS","UBISOFT",
+        "ROBLOX","MOJANG","MINECRAFT",
+        "COURSERA","UDEMY","SKILLSHARE","MASTERCLASS","LINKEDIN LEARNING",
+        "PLURALSIGHT","CODECADEMY","TREEHOUSE","BRILLIANT","DUOLINGO",
+        "AUDIBLE","KINDLE","SCRIBD","BLINKIST",
+        "UBER","LYFT","BOLT","GRAB","DIDI","CABIFY","FREENOW",
+        "AIRBNB","BOOKING","BOOKING.COM","EXPEDIA","HOTELS.COM","TRIVAGO",
+        "SKYSCANNER","KAYAK","TRAINLINE","NATIONAL RAIL","TFL",
+        "RYANAIR","EASYJET","BRITISH AIRWAYS","DELTA","UNITED","SOUTHWEST",
+        "HERTZ","AVIS","ENTERPRISE","SIXT","EUROPCAR",
+        "PELOTON","STRAVA","MYFITNESSPAL","HEADSPACE","CALM","FITBIT",
+        "NIKE","ADIDAS","UNDER ARMOUR","PUMA","REEBOK","GYM","PUREGYM",
+        "DAVID LLOYD","VIRGIN ACTIVE","ANYTIME FITNESS","PLANET FITNESS",
+        "PATREON","ONLYFANS","SUBSTACK","MEDIUM","GUMROAD",
+        "EXPERIAN","EQUIFAX","CREDIT KARMA","CLEARSCORE",
+        "VODAFONE","EE","O2","THREE","BT","SKY","VIRGIN MEDIA",
+        "VERIZON","ATT","T-MOBILE","SPRINT","COMCAST","XFINITY",
+        "BRITISH GAS","OCTOPUS ENERGY","BULB","EON","EDF","SSE","SCOTTISH POWER"
+    };
+
+    static (string Company, string? PaymentMethod) ExtractCompanyAndPayment(string memo)
+    {
+        if (string.IsNullOrWhiteSpace(memo)) return ("Unknown", null);
+        var cleaned = memo.Replace("*", " ").Replace("#", " ").Replace("  ", " ").Trim().ToUpperInvariant();
+        string? paymentMethod = null; string? company = null;
+
+        foreach (var processor in PaymentProcessors)
+        {
+            if (cleaned.Contains(processor, StringComparison.OrdinalIgnoreCase))
+            {
+                paymentMethod = FormatName(processor);
+                var idx = cleaned.IndexOf(processor, StringComparison.OrdinalIgnoreCase);
+                var after = cleaned[(idx + processor.Length)..].Trim();
+                company = FindKnownCompany(after);
+                if (company != null) return (company, paymentMethod);
+                if (!string.IsNullOrWhiteSpace(after))
+                {
+                    var words = after.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (words.Length > 0) return (FormatName(string.Join(" ", words.Take(2))), paymentMethod);
+                }
+            }
+        }
+
+        company = FindKnownCompany(cleaned);
+        if (company != null) return (company, null);
+
+        string[] skipPrefixes = ["CARD","PAYMENT","PURCHASE","POS","DEBIT","CREDIT","DIRECT","TRANSFER","REF","TO","FROM"];
+        var parts = cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var meaningful = parts.Where(p => !skipPrefixes.Contains(p) && p.Length > 2).Take(2).ToArray();
+        if (meaningful.Length > 0) return (FormatName(string.Join(" ", meaningful)), null);
+        return ("Unknown", null);
+    }
+
+    static string? FindKnownCompany(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        foreach (var c in KnownCompanies.OrderByDescending(c => c.Length))
+            if (text.Contains(c, StringComparison.OrdinalIgnoreCase)) return FormatName(c);
+        return null;
+    }
+
+    static string FormatName(string name) =>
+        string.IsNullOrWhiteSpace(name) ? name :
+        System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(name.ToLowerInvariant());
+
     static List<string> ParseCsvLine(string line)
     {
         var fields = new List<string>();
         var current = new System.Text.StringBuilder();
         var inQuotes = false;
-
         foreach (var c in line)
         {
-            if (c == '"')
-            {
-                inQuotes = !inQuotes;
-            }
-            else if (c == ',' && !inQuotes)
-            {
-                fields.Add(current.ToString());
-                current.Clear();
-            }
-            else
-            {
-                current.Append(c);
-            }
+            if (c == '"') inQuotes = !inQuotes;
+            else if (c == ',' && !inQuotes) { fields.Add(current.ToString()); current.Clear(); }
+            else current.Append(c);
         }
         fields.Add(current.ToString());
-
         return fields;
     }
 }
 
 <style>
-    .sub {
-        color: #aaa;
-        margin: .3rem 0 1rem;
-    }
+    .sub { color: #aaa; margin: .3rem 0 1rem }
 
-    .grid {
-        display: grid;
-        gap: 1rem;
-    }
+    .grid { display: grid; gap: 1rem }
 
-    @@media(min-width:900px) {
-        .grid {
-            grid-template-columns: 1.6fr 1fr;
-        }
-    }
+    @@media(min-width:900px) { .grid { grid-template-columns: 1.6fr 1fr } }
 
     .card {
-        background: #111;
-        border: 1px solid rgba(255,255,255,.08);
-        border-radius: 16px;
-        padding: 1rem;
+        background: #111; border: 1px solid rgba(255,255,255,.08);
+        border-radius: 16px; padding: 1rem;
         transition: transform .2s ease;
-        max-height: 60vh;
-        overflow: auto;
+        max-height: 60vh; overflow: auto;
     }
 
-    .card:hover {
-        transform: translateY(-1px);
-    }
+    .card:hover { transform: translateY(-1px) }
 
-    .card.empty {
-        text-align: center;
-        padding: 2rem;
-        color: #ccc;
-    }
-
-    .card.empty a {
-        color: #7aa2f7;
-        text-decoration: none;
-    }
-
-    .card.empty a:hover {
-        text-decoration: underline;
-    }
+    .card.empty { text-align: center; padding: 2rem; color: #ccc }
+    .card.empty a { color: #7aa2f7; text-decoration: none }
+    .card.empty a:hover { text-decoration: underline }
 
     .card-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: .6rem;
-        color: #ddd;
+        display: flex; justify-content: space-between;
+        align-items: center; margin-bottom: .6rem; color: #ddd;
     }
 
     .count {
-        font-size: .85rem;
-        padding: .15rem .5rem;
-        border-radius: 999px;
-        background: #1a1a1a;
+        font-size: .85rem; padding: .15rem .5rem;
+        border-radius: 999px; background: #1a1a1a;
         border: 1px solid rgba(255,255,255,.1);
     }
 
-    .table-container {
-        width: 100%;
-        overflow-x: auto;
-    }
+    .table-container { width: 100%; overflow-x: auto }
 
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        min-width: 480px;
-    }
-
-    th, td {
-        padding: .7rem;
-        border-bottom: 1px solid rgba(255,255,255,.06);
-    }
-
-    th {
-        text-align: left;
-        color: #bbb;
-    }
-
-    tbody tr:hover td {
-        background: #1a1a1a;
-    }
-
-    .clickable-row {
-        cursor: pointer;
-    }
-
-    .muted {
-        color: #aaa;
-    }
-
-    .r {
-        text-align: right;
-        color: #f3f3f3;
-    }
-
-    .mono {
-        font-variant-numeric: tabular-nums;
-        font-family: ui-monospace,monospace;
-        color: #f3f3f3;
-    }
+    table { width: 100%; border-collapse: collapse; min-width: 480px }
+    th, td { padding: .7rem; border-bottom: 1px solid rgba(255,255,255,.06) }
+    th { text-align: left; color: #bbb }
+    tbody tr:hover td { background: #1a1a1a }
+    .clickable-row { cursor: pointer }
+    .muted { color: #aaa }
+    .r { text-align: right; color: #f3f3f3 }
+    .mono { font-variant-numeric: tabular-nums; font-family: ui-monospace,monospace; color: #f3f3f3 }
 
     .pill {
-        display: inline-block;
-        padding: .15rem .55rem;
-        border-radius: 999px;
-        background: #1a1a1a;
-        border: 1px solid rgba(255,255,255,.08);
-        color: #f3f3f3;
+        display: inline-block; padding: .15rem .55rem;
+        border-radius: 999px; background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,.08); color: #f3f3f3;
     }
 
     .pill.payment {
-        background: #1a1a2e;
-        border-color: rgba(122, 162, 247, .2);
-        color: #7aa2f7;
-        font-size: .85em;
+        background: #1a1a2e; border-color: rgba(122,162,247,.2);
+        color: #7aa2f7; font-size: .85em;
     }
 
-    .company {
-        color: #f3f3f3;
+    .pill.account-pill {
+        background: #1a1a1a; border-color: rgba(255,255,255,.1);
+        color: #ccc; font-size: .8em;
     }
 
-    .date {
-        color: #f3f3f3;
+    .pill.currency-pill {
+        background: #1a2e1a; border-color: rgba(92,224,122,.2);
+        color: #5ce07a; font-size: .8em;
     }
 
-    .amount-negative {
-        color: #e05c5c !important;
+    .currency-tag {
+        font-size: .75rem; padding: .05rem .35rem;
+        border-radius: 999px; background: #1a2e1a;
+        border: 1px solid rgba(92,224,122,.2);
+        color: #5ce07a; margin-left: .25rem;
     }
 
-    .amount-positive {
-        color: #5ce07a !important;
-    }
+    .company { color: #f3f3f3 }
+    .date { color: #f3f3f3 }
+    .amount-negative { color: #e05c5c !important }
+    .amount-positive { color: #5ce07a !important }
 
-    .companies {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: grid;
-        gap: .4rem;
-    }
+    .companies { list-style: none; padding: 0; margin: 0; display: grid; gap: .4rem }
 
     .companies li {
-        padding: .55rem .7rem;
-        border-radius: 12px;
-        background: #151515;
-        border: 1px solid rgba(255,255,255,.08);
+        padding: .55rem .7rem; border-radius: 12px;
+        background: #151515; border: 1px solid rgba(255,255,255,.08);
         transition: background .2s ease,transform .2s ease;
-        color: #f3f3f3;
-        cursor: pointer;
+        color: #f3f3f3; cursor: pointer;
+        display: flex; align-items: center; justify-content: space-between;
     }
 
-    .companies li:hover {
-        background: #1c1c1c;
-        transform: translateY(-1px);
-    }
+    .companies li:hover { background: #1c1c1c; transform: translateY(-1px) }
 
     .error-banner {
-        background: rgba(224, 92, 92, .15);
-        border: 1px solid rgba(224, 92, 92, .3);
-        border-radius: 12px;
-        padding: .75rem 1rem;
-        margin-bottom: 1rem;
-        color: #eaa;
+        background: rgba(224,92,92,.15); border: 1px solid rgba(224,92,92,.3);
+        border-radius: 12px; padding: .75rem 1rem;
+        margin-bottom: 1rem; color: #eaa;
     }
 
     .back-bar {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        margin-bottom: 1rem;
+        display: flex; align-items: center;
+        gap: 1rem; margin-bottom: 1rem;
     }
 
     .back-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: .4rem;
-        padding: .45rem .75rem;
-        border-radius: 12px;
-        background: #141414;
-        border: 1px solid rgba(255,255,255,.08);
-        color: #ccc;
-        cursor: pointer;
+        display: inline-flex; align-items: center; gap: .4rem;
+        padding: .45rem .75rem; border-radius: 12px;
+        background: #141414; border: 1px solid rgba(255,255,255,.08);
+        color: #ccc; cursor: pointer;
         transition: background .2s ease, transform .2s ease, color .2s ease;
         font-size: .9rem;
     }
 
     .back-btn svg {
-        width: 16px;
-        height: 16px;
-        stroke: currentColor;
-        fill: none;
-        stroke-width: 2;
-        stroke-linecap: round;
-        stroke-linejoin: round;
+        width: 16px; height: 16px;
+        stroke: currentColor; fill: none;
+        stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
     }
 
-    .back-btn:hover {
-        background: #1c1c1c;
-        color: #fff;
-        transform: translateY(-1px);
-    }
+    .back-btn:hover { background: #1c1c1c; color: #fff; transform: translateY(-1px) }
 
-    .company-title {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: #fff;
-    }
+    .company-title { font-size: 1.1rem; font-weight: 600; color: #fff }
 
     .profile-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: .75rem;
-        margin-bottom: 1rem;
+        display: grid; grid-template-columns: repeat(4, 1fr);
+        gap: .75rem; margin-bottom: 1rem;
     }
 
-    @@media (max-width: 768px) {
-        .profile-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
+    @@media (max-width: 768px) { .profile-grid { grid-template-columns: repeat(2, 1fr) } }
 
     .stat-card {
-        display: flex;
-        flex-direction: column;
-        gap: .25rem;
-        padding: .75rem 1rem;
-        background: #111;
-        border: 1px solid rgba(255,255,255,.08);
-        border-radius: 12px;
+        display: flex; flex-direction: column; gap: .25rem;
+        padding: .75rem 1rem; background: #111;
+        border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
     }
 
     .stat-label {
-        font-size: .8rem;
-        color: #888;
-        text-transform: uppercase;
-        letter-spacing: .03em;
+        font-size: .8rem; color: #888;
+        text-transform: uppercase; letter-spacing: .03em;
     }
 
     .stat-value {
-        font-size: 1.25rem;
-        font-weight: 600;
+        font-size: 1.25rem; font-weight: 600;
         font-variant-numeric: tabular-nums;
         font-family: ui-monospace, monospace;
         color: #f3f3f3;

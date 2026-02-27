@@ -1,152 +1,679 @@
-﻿@page "/"
+@page "/"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components.Forms
 @inject IWebHostEnvironment Env
 
-<h1>Upload CSV</h1>
-<p class="sub">Import transactions to analyze spendings and subscriptions</p>
+<h1>Accounts</h1>
+<p class="sub">Create accounts for your bank statements, set currency and date format per account</p>
 
-<div class="card">
-    <label class="btn" title="Select one or more .csv files">
-        <svg viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M5 21h14" /></svg>
-        Select CSV
-        <InputFile OnChange="OnFilesSelected" accept=".csv" multiple />
-    </label>
-
-    @if (SelectedFiles.Count > 0)
-    {
-        <div class="preview">
-            <div class="preview-title">Selected files</div>
-
-            <ul class="file-list">
-                @foreach (var p in SelectedFiles)
-                {
-                    <li class="file-item">
-                        <span class="file-name" title="@p.Name">@p.Name</span>
-                        <span class="file-ext">@p.Extension</span>
-                    </li>
-                }
-            </ul>
-
-            @if (InvalidFiles.Count > 0)
+<div class="card currency-bar">
+    <div class="currency-left">
+        <span class="currency-label">Main currency</span>
+        <select class="field-input currency-select" @bind="MainCurrency" @bind:after="OnMainCurrencyChanged">
+            @foreach (var c in Currencies)
             {
-                <div class="status error">
-                    Only CSV files are allowed:
-                    <ul class="invalid-list">
-                        @foreach (var name in InvalidFiles)
-                        {
-                            <li>@name</li>
-                        }
-                    </ul>
-                </div>
+                <option value="@c.Key">@c.Key</option>
             }
-
-            <button class="btn primary" @onclick="UploadSelectedAsync" disabled="@(!CanUpload)">
-                Upload
-            </button>
-        </div>
-    }
-
-    @if (!string.IsNullOrWhiteSpace(Status))
-    {
-        <div class="status">@Status</div>
-    }
+        </select>
+    </div>
+    <div class="currency-right">
+        <span class="currency-label">Conversion rates</span>
+        @foreach (var cur in Currencies)
+        {
+            var c = cur.Key;
+            <div class="rate-inline">
+                <span class="rate-code">@c</span>
+                @if (c == "EUR")
+                {
+                    <input type="text" class="field-input rate-input-sm" value="1.00" disabled />
+                }
+                else
+                {
+                    <input type="number" step="0.0001" min="0.0001" class="field-input rate-input-sm"
+                           value="@CurrencyRates[c].ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)"
+                           @onchange="(e) => OnRateChanged(c, e)" />
+                }
+            </div>
+        }
+        <button class="btn primary" @onclick="SaveCurrencySettings">Save</button>
+        @if (!string.IsNullOrWhiteSpace(CurrencyStatus))
+        {
+            <span class="currency-status">@CurrencyStatus</span>
+        }
+    </div>
 </div>
 
-@if (UploadedFiles.Count > 0)
+<div class="accounts-bar">
+    <button class="btn add-btn" @onclick="ShowCreateDialog">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+        New Account
+    </button>
+</div>
+
+@if (ShowCreate)
 {
-    <div class="card uploaded-section">
-        <div class="preview-title">Uploaded files</div>
-        <ul class="file-list">
-            @foreach (var file in UploadedFiles)
+    <div class="overlay" @onclick="HideCreateDialog">
+        <div class="dialog" @onclick:stopPropagation="true">
+            <div class="dialog-title">New Account</div>
+
+            <label class="field-label">Account Name</label>
+            <input type="text" class="field-input" @bind="NewAccountName" placeholder="e.g. Barclays Current" />
+
+            <label class="field-label">Currency</label>
+            <select class="field-input" @bind="NewAccountCurrency">
+                @foreach (var c in Currencies)
+                {
+                    <option value="@c.Key">@c.Key — @c.Value</option>
+                }
+            </select>
+
+            <label class="field-label">Date Format</label>
+            <select class="field-input" @bind="NewAccountDateFormat">
+                @foreach (var f in DateFormats)
+                {
+                    <option value="@f.Key">@f.Value</option>
+                }
+            </select>
+
+            <div class="dialog-actions">
+                <button class="btn" @onclick="HideCreateDialog">Cancel</button>
+                <button class="btn primary" @onclick="CreateAccount" disabled="@(string.IsNullOrWhiteSpace(NewAccountName))">Create</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (EditingAccount is not null)
+{
+    <div class="overlay" @onclick="HideEditDialog">
+        <div class="dialog" @onclick:stopPropagation="true">
+            <div class="dialog-title">Edit Account</div>
+
+            <label class="field-label">Account Name</label>
+            <input type="text" class="field-input" @bind="EditAccountName" />
+
+            <label class="field-label">Currency</label>
+            <select class="field-input" @bind="EditAccountCurrency">
+                @foreach (var c in Currencies)
+                {
+                    <option value="@c.Key">@c.Key — @c.Value</option>
+                }
+            </select>
+
+            <label class="field-label">Date Format</label>
+            <select class="field-input" @bind="EditAccountDateFormat">
+                @foreach (var f in DateFormats)
+                {
+                    <option value="@f.Key">@f.Value</option>
+                }
+            </select>
+
+            <div class="dialog-actions">
+                <button class="btn" @onclick="HideEditDialog">Cancel</button>
+                <button class="btn primary" @onclick="SaveEditAccount" disabled="@(string.IsNullOrWhiteSpace(EditAccountName))">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (MappingAccount is not null)
+{
+    <div class="overlay" @onclick="HideMappingDialog">
+        <div class="dialog wide" @onclick:stopPropagation="true">
+            <div class="dialog-title">Column Mapping — @MappingAccount.Name</div>
+            <p class="mapping-hint">Select which column corresponds to each field. The preview shows the first few rows of your data.</p>
+
+            @if (MappingPreviewHeaders.Count > 0)
             {
-                <li class="file-item">
-                    <span class="file-name" title="@file.Name">@file.Name</span>
-                    <button class="remove-btn" @onclick="() => RemoveUploadedFile(file)" title="Remove file">
-                        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                    </button>
-                </li>
+                <div class="mapping-fields">
+                    <div class="mapping-field">
+                        <label class="field-label">Date Column</label>
+                        <select class="field-input" @bind="MappingDateCol">
+                            <option value="-1">— Auto —</option>
+                            @for (int i = 0; i < MappingPreviewHeaders.Count; i++)
+                            {
+                                <option value="@i">@MappingPreviewHeaders[i]</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mapping-field">
+                        <label class="field-label">Amount Column</label>
+                        <select class="field-input" @bind="MappingAmountCol">
+                            <option value="-1">— Auto —</option>
+                            @for (int i = 0; i < MappingPreviewHeaders.Count; i++)
+                            {
+                                <option value="@i">@MappingPreviewHeaders[i]</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mapping-field">
+                        <label class="field-label">Description Column</label>
+                        <select class="field-input" @bind="MappingMemoCol">
+                            <option value="-1">— Auto —</option>
+                            @for (int i = 0; i < MappingPreviewHeaders.Count; i++)
+                            {
+                                <option value="@i">@MappingPreviewHeaders[i]</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mapping-field">
+                        <label class="field-label">Category Column</label>
+                        <select class="field-input" @bind="MappingCategoryCol">
+                            <option value="-1">— Auto —</option>
+                            @for (int i = 0; i < MappingPreviewHeaders.Count; i++)
+                            {
+                                <option value="@i">@MappingPreviewHeaders[i]</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="preview-table-container">
+                    <table class="preview-table">
+                        <thead>
+                            <tr>
+                                @foreach (var h in MappingPreviewHeaders)
+                                {
+                                    <th>@h</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in MappingPreviewRows)
+                            {
+                                <tr>
+                                    @foreach (var cell in row)
+                                    {
+                                        <td>@cell</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
-        </ul>
+            else
+            {
+                <p class="muted">No CSV files found in this account to preview.</p>
+            }
+
+            <div class="dialog-actions">
+                <button class="btn" @onclick="HideMappingDialog">Cancel</button>
+                <button class="btn primary" @onclick="SaveMapping">Save Mapping</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(Status))
+{
+    <div class="status">@Status</div>
+}
+
+@if (Accounts.Count == 0)
+{
+    <div class="card empty">
+        <p>No accounts yet.</p>
+        <p class="muted">Create an account to start uploading your bank statements.</p>
+    </div>
+}
+
+@foreach (var account in Accounts)
+{
+    var acct = account;
+    var isExpanded = ExpandedAccounts.Contains(acct.Id);
+
+    <div class="card account-card">
+        <div class="account-header" @onclick="() => ToggleExpand(acct.Id)">
+            <div class="account-header-left">
+                <svg class="chevron @(isExpanded ? "expanded" : "")" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" /></svg>
+                <span class="account-name">@acct.Name</span>
+                <span class="pill currency-pill">@acct.Currency</span>
+                <span class="pill format-pill">@DateFormats[acct.DateFormat]</span>
+                @if (acct.HasCustomMapping)
+                {
+                    <span class="pill mapping-pill">Custom Mapping</span>
+                }
+            </div>
+            <div class="account-header-right">
+                <span class="file-count">@GetAccountFiles(acct).Count file(s)</span>
+                <button class="icon-btn" @onclick="() => OpenEditDialog(acct)" @onclick:stopPropagation="true" title="Edit account">
+                    <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                </button>
+                <button class="icon-btn" @onclick="() => OpenMappingDialog(acct)" @onclick:stopPropagation="true" title="Column mapping">
+                    <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16M8 6v12M16 6v12" /></svg>
+                </button>
+                <button class="icon-btn danger" @onclick="() => DeleteAccount(acct)" @onclick:stopPropagation="true" title="Delete account">
+                    <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg>
+                </button>
+            </div>
+        </div>
+
+        @if (isExpanded)
+        {
+            <div class="account-body">
+                <label class="btn upload-btn" title="Select one or more .csv files">
+                    <svg viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M5 21h14" /></svg>
+                    Select CSV
+                    <InputFile OnChange="(e) => OnFilesSelected(e, acct)" accept=".csv" multiple />
+                </label>
+
+                @if (PendingFiles.ContainsKey(acct.Id) && PendingFiles[acct.Id].Count > 0)
+                {
+                    <div class="pending-section">
+                        <div class="section-label">Selected files</div>
+                        <ul class="file-list">
+                            @foreach (var p in PendingFiles[acct.Id])
+                            {
+                                <li class="file-item">
+                                    <span class="file-name" title="@p.Name">@p.Name</span>
+                                    <span class="file-ext">@p.Extension</span>
+                                </li>
+                            }
+                        </ul>
+
+                        @if (PendingInvalid.ContainsKey(acct.Id) && PendingInvalid[acct.Id].Count > 0)
+                        {
+                            <div class="status error">
+                                Only CSV files are allowed:
+                                <ul class="invalid-list">
+                                    @foreach (var name in PendingInvalid[acct.Id])
+                                    {
+                                        <li>@name</li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+
+                        <button class="btn primary" @onclick="() => UploadFilesAsync(acct)"
+                                disabled="@(!CanUpload(acct.Id))">
+                            Upload
+                        </button>
+                    </div>
+                }
+
+                @{
+                    var files = GetAccountFiles(acct);
+                }
+                @if (files.Count > 0)
+                {
+                    <div class="uploaded-section">
+                        <div class="section-label">Uploaded files</div>
+                        <ul class="file-list">
+                            @foreach (var file in files)
+                            {
+                                <li class="file-item">
+                                    <span class="file-name" title="@file.Name">@file.Name</span>
+                                    <button class="remove-btn" @onclick="() => RemoveFile(acct, file)" title="Remove file">
+                                        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+                else
+                {
+                    <p class="muted no-files">No files uploaded yet.</p>
+                }
+            </div>
+        }
     </div>
 }
 
 @code {
-    string? Status;
+    static readonly Dictionary<string, string> Currencies = new()
+    {
+        ["GBP"] = "British Pound",
+        ["USD"] = "US Dollar",
+        ["EUR"] = "Euro",
+        ["JPY"] = "Japanese Yen",
+        ["CHF"] = "Swiss Franc"
+    };
 
-    readonly List<PickedFile> SelectedFiles = new();
-    readonly List<string> InvalidFiles = new();
-    readonly List<UploadedFile> UploadedFiles = new();
+    static readonly Dictionary<string, string> DateFormats = new()
+    {
+        ["dd/MM/yyyy"] = "DD/MM/YYYY",
+        ["MM/dd/yyyy"] = "MM/DD/YYYY",
+        ["yyyy-MM-dd"] = "YYYY-MM-DD",
+        ["dd-MM-yyyy"] = "DD-MM-YYYY",
+        ["MM-dd-yyyy"] = "MM-DD-YYYY"
+    };
 
-    bool CanUpload => SelectedFiles.Count > 0 && InvalidFiles.Count == 0;
+    static readonly Dictionary<string, string> CurrencySymbols = new()
+    {
+        ["GBP"] = "£",
+        ["USD"] = "$",
+        ["EUR"] = "€",
+        ["JPY"] = "¥",
+        ["CHF"] = "CHF"
+    };
+
+    sealed record AccountInfo
+    {
+        public string Id { get; init; } = "";
+        public string Name { get; set; } = "";
+        public string Currency { get; set; } = "GBP";
+        public string DateFormat { get; set; } = "dd/MM/yyyy";
+        public bool HasCustomMapping { get; set; }
+        public int DateIndex { get; set; } = -1;
+        public int AmountIndex { get; set; } = -1;
+        public int MemoIndex { get; set; } = -1;
+        public int CategoryIndex { get; set; } = -1;
+    }
 
     sealed record PickedFile(IBrowserFile File, string Name, string Extension);
     sealed record UploadedFile(string Name, string FullPath);
 
-    protected override void OnInitialized()
-    {
-        LoadUploadedFiles();
-    }
+    readonly List<AccountInfo> Accounts = new();
+    readonly HashSet<string> ExpandedAccounts = new();
+    readonly Dictionary<string, List<PickedFile>> PendingFiles = new();
+    readonly Dictionary<string, List<string>> PendingInvalid = new();
 
-    void LoadUploadedFiles()
-    {
-        UploadedFiles.Clear();
-        var dir = Path.Combine(Env.ContentRootPath, "App_Data", "uploads");
-        if (!Directory.Exists(dir))
-            return;
+    string? Status;
 
-        foreach (var filePath in Directory.GetFiles(dir, "*.csv"))
+    bool ShowCreate;
+    string NewAccountName = "";
+    string NewAccountCurrency = "GBP";
+    string NewAccountDateFormat = "dd/MM/yyyy";
+
+    AccountInfo? EditingAccount;
+    string EditAccountName = "";
+    string EditAccountCurrency = "GBP";
+    string EditAccountDateFormat = "dd/MM/yyyy";
+
+    AccountInfo? MappingAccount;
+    List<string> MappingPreviewHeaders = new();
+    List<List<string>> MappingPreviewRows = new();
+    int MappingDateCol = -1;
+    int MappingAmountCol = -1;
+    int MappingMemoCol = -1;
+    int MappingCategoryCol = -1;
+
+    string MainCurrency = "EUR";
+    readonly Dictionary<string, decimal> CurrencyRates = new()
+    {
+        ["EUR"] = 1m,
+        ["GBP"] = 1.14m,
+        ["USD"] = 0.85m,
+        ["JPY"] = 0.0054m,
+        ["CHF"] = 1.10m
+    };
+    string? CurrencyStatus;
+
+    List<string> UsedCurrencies
+    {
+        get
         {
-            var name = Path.GetFileName(filePath);
-            UploadedFiles.Add(new UploadedFile(name, filePath));
+            var used = new HashSet<string>(Accounts.Select(a => a.Currency));
+            used.Add("EUR");
+            if (!string.IsNullOrEmpty(MainCurrency))
+                used.Add(MainCurrency);
+            return Currencies.Keys.Where(k => used.Contains(k)).ToList();
         }
     }
 
-    void OnFilesSelected(InputFileChangeEventArgs e)
+    protected override void OnInitialized()
+    {
+        LoadAccounts();
+        LoadCurrencySettings();
+    }
+
+    void LoadCurrencySettings()
+    {
+        var settingsPath = Path.Combine(Env.ContentRootPath, "App_Data", "settings.meta");
+        if (!File.Exists(settingsPath)) return;
+
+        foreach (var line in File.ReadAllLines(settingsPath))
+        {
+            var sep = line.IndexOf('=');
+            if (sep < 0) continue;
+            var key = line[..sep].Trim();
+            var val = line[(sep + 1)..].Trim();
+
+            if (key == "maincurrency" && Currencies.ContainsKey(val))
+            {
+                MainCurrency = val;
+            }
+            else if (key.StartsWith("rate_"))
+            {
+                var cur = key[5..];
+                if (Currencies.ContainsKey(cur) && decimal.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var rate))
+                {
+                    CurrencyRates[cur] = rate;
+                }
+            }
+        }
+    }
+
+    void SaveCurrencySettings()
+    {
+        var dir = Path.Combine(Env.ContentRootPath, "App_Data");
+        Directory.CreateDirectory(dir);
+        var settingsPath = Path.Combine(dir, "settings.meta");
+
+        var lines = new List<string> { $"maincurrency={MainCurrency}" };
+        foreach (var kvp in CurrencyRates)
+        {
+            lines.Add($"rate_{kvp.Key}={kvp.Value.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)}");
+        }
+        File.WriteAllLines(settingsPath, lines);
+        CurrencyStatus = "Currency settings saved";
+    }
+
+    void OnMainCurrencyChanged()
+    {
+        CurrencyStatus = null;
+    }
+
+    void OnRateChanged(string currency, ChangeEventArgs e)
+    {
+        if (decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var rate) && rate > 0)
+        {
+            CurrencyRates[currency] = rate;
+        }
+        CurrencyStatus = null;
+    }
+
+    void LoadAccounts()
+    {
+        Accounts.Clear();
+        var baseDir = Path.Combine(Env.ContentRootPath, "App_Data", "accounts");
+        if (!Directory.Exists(baseDir))
+            return;
+
+        foreach (var dir in Directory.GetDirectories(baseDir))
+        {
+            var metaPath = Path.Combine(dir, "account.meta");
+            if (!File.Exists(metaPath))
+                continue;
+
+            var lines = File.ReadAllLines(metaPath);
+            var account = new AccountInfo { Id = Path.GetFileName(dir) };
+
+            foreach (var line in lines)
+            {
+                var sep = line.IndexOf('=');
+                if (sep < 0) continue;
+                var key = line[..sep].Trim();
+                var val = line[(sep + 1)..].Trim();
+
+                switch (key)
+                {
+                    case "name": account.Name = val; break;
+                    case "currency": account.Currency = val; break;
+                    case "dateformat": account.DateFormat = val; break;
+                    case "hasmapping": account.HasCustomMapping = val == "true"; break;
+                    case "dateindex": if (int.TryParse(val, out var di)) account.DateIndex = di; break;
+                    case "amountindex": if (int.TryParse(val, out var ai)) account.AmountIndex = ai; break;
+                    case "memoindex": if (int.TryParse(val, out var mi)) account.MemoIndex = mi; break;
+                    case "categoryindex": if (int.TryParse(val, out var ci)) account.CategoryIndex = ci; break;
+                }
+            }
+
+            Accounts.Add(account);
+        }
+    }
+
+    void SaveAccountMeta(AccountInfo account)
+    {
+        var dir = Path.Combine(Env.ContentRootPath, "App_Data", "accounts", account.Id);
+        Directory.CreateDirectory(dir);
+
+        var metaPath = Path.Combine(dir, "account.meta");
+        var lines = new[]
+        {
+            $"name={account.Name}",
+            $"currency={account.Currency}",
+            $"dateformat={account.DateFormat}",
+            $"hasmapping={account.HasCustomMapping.ToString().ToLowerInvariant()}",
+            $"dateindex={account.DateIndex}",
+            $"amountindex={account.AmountIndex}",
+            $"memoindex={account.MemoIndex}",
+            $"categoryindex={account.CategoryIndex}"
+        };
+        File.WriteAllLines(metaPath, lines);
+    }
+
+    List<UploadedFile> GetAccountFiles(AccountInfo account)
+    {
+        var dir = Path.Combine(Env.ContentRootPath, "App_Data", "accounts", account.Id);
+        if (!Directory.Exists(dir))
+            return new();
+
+        return Directory.GetFiles(dir, "*.csv")
+            .Select(f => new UploadedFile(Path.GetFileName(f), f))
+            .ToList();
+    }
+
+    void ShowCreateDialog()
+    {
+        NewAccountName = "";
+        NewAccountCurrency = "GBP";
+        NewAccountDateFormat = "dd/MM/yyyy";
+        ShowCreate = true;
+    }
+
+    void HideCreateDialog() => ShowCreate = false;
+
+    void CreateAccount()
+    {
+        if (string.IsNullOrWhiteSpace(NewAccountName))
+            return;
+
+        var id = $"{DateTime.UtcNow:yyyyMMddHHmmss}_{Guid.NewGuid().ToString("N")[..8]}";
+        var account = new AccountInfo
+        {
+            Id = id,
+            Name = NewAccountName.Trim(),
+            Currency = NewAccountCurrency,
+            DateFormat = NewAccountDateFormat
+        };
+
+        SaveAccountMeta(account);
+        Accounts.Add(account);
+        ExpandedAccounts.Add(id);
+        ShowCreate = false;
+        Status = $"Created account \"{account.Name}\"";
+    }
+
+    void OpenEditDialog(AccountInfo account)
+    {
+        EditingAccount = account;
+        EditAccountName = account.Name;
+        EditAccountCurrency = account.Currency;
+        EditAccountDateFormat = account.DateFormat;
+    }
+
+    void HideEditDialog() => EditingAccount = null;
+
+    void SaveEditAccount()
+    {
+        if (EditingAccount is null || string.IsNullOrWhiteSpace(EditAccountName))
+            return;
+
+        EditingAccount.Name = EditAccountName.Trim();
+        EditingAccount.Currency = EditAccountCurrency;
+        EditingAccount.DateFormat = EditAccountDateFormat;
+        SaveAccountMeta(EditingAccount);
+        EditingAccount = null;
+        Status = "Account updated";
+    }
+
+    void DeleteAccount(AccountInfo account)
+    {
+        var dir = Path.Combine(Env.ContentRootPath, "App_Data", "accounts", account.Id);
+        if (Directory.Exists(dir))
+            Directory.Delete(dir, true);
+
+        Accounts.Remove(account);
+        ExpandedAccounts.Remove(account.Id);
+        PendingFiles.Remove(account.Id);
+        PendingInvalid.Remove(account.Id);
+        Status = $"Deleted account \"{account.Name}\"";
+    }
+
+    void ToggleExpand(string id)
+    {
+        if (!ExpandedAccounts.Remove(id))
+            ExpandedAccounts.Add(id);
+    }
+
+    void OnFilesSelected(InputFileChangeEventArgs e, AccountInfo account)
     {
         Status = null;
-        SelectedFiles.Clear();
-        InvalidFiles.Clear();
+        if (!PendingFiles.ContainsKey(account.Id))
+            PendingFiles[account.Id] = new();
+        if (!PendingInvalid.ContainsKey(account.Id))
+            PendingInvalid[account.Id] = new();
+
+        PendingFiles[account.Id].Clear();
+        PendingInvalid[account.Id].Clear();
 
         foreach (var f in e.GetMultipleFiles())
         {
-            if (!IsCsv(f))
+            if (!string.Equals(Path.GetExtension(f.Name), ".csv", StringComparison.OrdinalIgnoreCase))
             {
-                InvalidFiles.Add(f.Name);
+                PendingInvalid[account.Id].Add(f.Name);
                 continue;
             }
 
             var ext = Path.GetExtension(f.Name);
-            SelectedFiles.Add(new PickedFile(f, f.Name, string.IsNullOrWhiteSpace(ext) ? ".csv" : ext));
+            PendingFiles[account.Id].Add(new PickedFile(f, f.Name, string.IsNullOrWhiteSpace(ext) ? ".csv" : ext));
         }
     }
 
-    static bool IsCsv(IBrowserFile f)
-        => string.Equals(Path.GetExtension(f.Name), ".csv", StringComparison.OrdinalIgnoreCase);
-
-    async Task UploadSelectedAsync()
+    bool CanUpload(string accountId)
     {
-        if (!CanUpload)
+        return PendingFiles.ContainsKey(accountId)
+               && PendingFiles[accountId].Count > 0
+               && (!PendingInvalid.ContainsKey(accountId) || PendingInvalid[accountId].Count == 0);
+    }
+
+    async Task UploadFilesAsync(AccountInfo account)
+    {
+        if (!CanUpload(account.Id))
             return;
 
         try
         {
-            var dir = Path.Combine(Env.ContentRootPath, "App_Data", "uploads");
+            var dir = Path.Combine(Env.ContentRootPath, "App_Data", "accounts", account.Id);
             Directory.CreateDirectory(dir);
 
-            foreach (var picked in SelectedFiles)
+            var picked = PendingFiles[account.Id];
+
+            foreach (var p in picked)
             {
-                var safeName = Path.GetFileName(picked.File.Name);
+                var safeName = Path.GetFileName(p.File.Name);
                 var path = Path.Combine(dir, $"{DateTime.UtcNow:yyyyMMddHHmmss}_{safeName}");
 
-                await using var r = picked.File.OpenReadStream(10 * 1024 * 1024);
+                await using var r = p.File.OpenReadStream(10 * 1024 * 1024);
                 await using var w = File.Create(path);
                 await r.CopyToAsync(w);
             }
 
-            Status = $"Uploaded {SelectedFiles.Count} file(s).";
-            SelectedFiles.Clear();
-            LoadUploadedFiles();
+            Status = $"Uploaded {picked.Count} file(s) to \"{account.Name}\"";
+            PendingFiles[account.Id].Clear();
         }
         catch (Exception ex)
         {
@@ -154,21 +681,79 @@
         }
     }
 
-    void RemoveUploadedFile(UploadedFile file)
+    void RemoveFile(AccountInfo account, UploadedFile file)
     {
         try
         {
             if (File.Exists(file.FullPath))
-            {
                 File.Delete(file.FullPath);
-            }
-            UploadedFiles.Remove(file);
             Status = $"Removed {file.Name}";
         }
         catch (Exception ex)
         {
             Status = ex.Message;
         }
+    }
+
+    void OpenMappingDialog(AccountInfo account)
+    {
+        MappingAccount = account;
+        MappingDateCol = account.HasCustomMapping ? account.DateIndex : -1;
+        MappingAmountCol = account.HasCustomMapping ? account.AmountIndex : -1;
+        MappingMemoCol = account.HasCustomMapping ? account.MemoIndex : -1;
+        MappingCategoryCol = account.HasCustomMapping ? account.CategoryIndex : -1;
+
+        MappingPreviewHeaders.Clear();
+        MappingPreviewRows.Clear();
+
+        var files = GetAccountFiles(account);
+        if (files.Count > 0)
+        {
+            var lines = File.ReadAllLines(files[0].FullPath);
+            if (lines.Length >= 1)
+            {
+                MappingPreviewHeaders = ParseCsvLine(lines[0]);
+                for (int i = 1; i < Math.Min(lines.Length, 6); i++)
+                {
+                    if (!string.IsNullOrWhiteSpace(lines[i]))
+                        MappingPreviewRows.Add(ParseCsvLine(lines[i]));
+                }
+            }
+        }
+    }
+
+    void HideMappingDialog() => MappingAccount = null;
+
+    void SaveMapping()
+    {
+        if (MappingAccount is null) return;
+
+        bool anyCustom = MappingDateCol >= 0 || MappingAmountCol >= 0 || MappingMemoCol >= 0 || MappingCategoryCol >= 0;
+
+        MappingAccount.HasCustomMapping = anyCustom;
+        MappingAccount.DateIndex = MappingDateCol;
+        MappingAccount.AmountIndex = MappingAmountCol;
+        MappingAccount.MemoIndex = MappingMemoCol;
+        MappingAccount.CategoryIndex = MappingCategoryCol;
+
+        SaveAccountMeta(MappingAccount);
+        MappingAccount = null;
+        Status = "Column mapping saved";
+    }
+
+    static List<string> ParseCsvLine(string line)
+    {
+        var fields = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var inQuotes = false;
+        foreach (var c in line)
+        {
+            if (c == '"') inQuotes = !inQuotes;
+            else if (c == ',' && !inQuotes) { fields.Add(current.ToString()); current.Clear(); }
+            else current.Append(c);
+        }
+        fields.Add(current.ToString());
+        return fields;
     }
 }
 
@@ -177,90 +762,305 @@
 
     .sub { color: #aaa; margin: .3rem 0 1rem }
 
-    .card {
-        padding: 1.25rem;
-        border-radius: 16px;
-        background: #111;
-        border: 1px solid rgba(255,255,255,.08)
+    .currency-bar {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: .6rem;
+        margin-bottom: 1rem;
+        flex-wrap: nowrap;
+        padding: .6rem 1rem;
+        overflow-x: auto;
     }
 
-    .uploaded-section {
-        margin-top: 1rem;
+    .currency-left {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        flex: 0 0 auto;
+    }
+
+    .currency-right {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        flex: 0 0 auto;
+    }
+
+    .currency-bar .field-input {
+        width: auto;
+        min-width: 0;
+        max-width: 5rem;
+    }
+
+    .currency-label {
+        font-size: .85rem;
+        color: #888;
+        white-space: nowrap;
+        flex: 0 0 auto;
+    }
+
+    .currency-bar .currency-select {
+        padding: .25rem .3rem;
+        font-size: .8rem;
+        line-height: 1.2;
+        flex: 0 0 auto;
+        width: auto;
+        min-width: 0;
+        height: auto;
+    }
+
+    .rate-inline {
+        display: flex;
+        align-items: center;
+        gap: .3rem;
+        flex: 0 0 auto;
+    }
+
+    .rate-code {
+        font-size: .8rem;
+        font-weight: 600;
+        color: #aaa;
+        font-family: ui-monospace, monospace;
+    }
+
+    .currency-bar .rate-input-sm {
+        width: 3.2rem;
+        max-width: 3.2rem;
+        padding: .25rem .3rem;
+        text-align: right;
+        font-size: .8rem;
+        font-family: ui-monospace, monospace;
+        font-variant-numeric: tabular-nums;
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+
+    .rate-input-sm::-webkit-inner-spin-button,
+    .rate-input-sm::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .rate-input-sm:disabled {
+        opacity: .5;
+        cursor: not-allowed;
+    }
+
+    .currency-status {
+        font-size: .85rem;
+        color: #5ce07a;
+        white-space: nowrap;
+        flex: 0 0 auto;
+    }
+
+    .accounts-bar {
+        display: flex;
+        gap: .5rem;
+        margin-bottom: 1rem;
     }
 
     .btn {
         display: inline-flex;
         align-items: center;
-        gap: .6rem;
-        padding: .75rem 1rem;
-        border-radius: 14px;
-        background: #1a1a1a;
-        border: 1px solid rgba(255,255,255,.1);
+        gap: .4rem;
+        padding: .45rem .7rem;
+        border-radius: 12px;
+        background: #141414;
+        border: 1px solid rgba(255,255,255,.08);
         cursor: pointer;
-        transition: background .2s ease, transform .2s ease;
-        color: #f3f3f3;
-        font-weight: 500;
+        transition: background .2s ease, transform .2s ease, color .2s ease;
+        color: #ccc;
     }
 
-    .btn:hover {
-        background: #222;
-        color: #f3f3f3;
-        transform: translateY(-1px)
-    }
+    .btn:hover { background: #1c1c1c; color: #fff; transform: translateY(-1px) }
 
     .btn svg {
-        width: 18px;
-        height: 18px;
-        stroke: #fff;
-        fill: none;
-        stroke-width: 1.7;
+        width: 16px; height: 16px;
+        stroke: currentColor; fill: none; stroke-width: 2;
+        stroke-linecap: round; stroke-linejoin: round;
     }
 
     .btn input { position: absolute; opacity: 0 }
 
     .btn.primary {
-        margin-top: .75rem;
-        border-color: rgba(255,255,255,.16);
-        background: #202020;
+        background: #1f1f1f;
+        border-color: rgba(255,255,255,.18);
+        color: #fff;
     }
 
-    .btn.primary:disabled {
-        opacity: .45;
-        cursor: not-allowed;
-        transform: none;
+    .currency-bar .btn.primary {
+        padding: .25rem .6rem;
+        font-size: .8rem;
     }
 
-    .btn.primary:hover { background: #2a2a2a; color: #f3f3f3; }
+    .btn.primary:disabled { opacity: .45; cursor: not-allowed; transform: none }
+    .btn.primary:hover { background: #2a2a2a; color: #fff }
 
-    .preview {
+    .add-btn {
+        background: #1f1f1f;
+        border-color: rgba(255,255,255,.18);
+        color: #fff;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .add-btn:hover { background: #2a2a2a; color: #fff }
+
+    .card {
+        padding: 1.25rem;
+        border-radius: 16px;
+        background: #111;
+        border: 1px solid rgba(255,255,255,.08);
+        margin-bottom: .75rem;
+    }
+
+    .card.empty { text-align: center; padding: 2rem; color: #ccc }
+
+    .account-card { padding: 0; overflow: hidden }
+
+    .account-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 1.25rem;
+        cursor: pointer;
+        transition: background .2s ease;
+        gap: .75rem;
+        flex-wrap: wrap;
+    }
+
+    .account-header:hover { background: #151515 }
+
+    .account-header-left {
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+        flex-wrap: wrap;
+        min-width: 0;
+    }
+
+    .account-header-right {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        flex-wrap: wrap;
+    }
+
+    .chevron {
+        width: 16px; height: 16px;
+        stroke: #888; fill: none;
+        stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+        transition: transform .2s ease;
+        flex: 0 0 auto;
+    }
+
+    .chevron.expanded { transform: rotate(90deg) }
+
+    .account-name {
+        font-weight: 600;
+        color: #f3f3f3;
+        font-size: 1rem;
+    }
+
+    .pill {
+        display: inline-block;
+        padding: .12rem .5rem;
+        border-radius: 999px;
+        font-size: .8rem;
+        background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,.1);
+        color: #ccc;
+    }
+
+    .currency-pill {
+        background: #1a2e1a;
+        border-color: rgba(92,224,122,.2);
+        color: #5ce07a;
+    }
+
+    .format-pill {
+        background: #1a1a2e;
+        border-color: rgba(122,162,247,.2);
+        color: #7aa2f7;
+    }
+
+    .mapping-pill {
+        background: #2e2a1a;
+        border-color: rgba(224,169,62,.2);
+        color: #e0a93e;
+    }
+
+    .file-count {
+        font-size: .85rem;
+        color: #888;
+    }
+
+    .icon-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: 1px solid rgba(255,255,255,.08);
+        border-radius: 8px;
+        padding: .35rem;
+        cursor: pointer;
+        transition: background .2s ease, border-color .2s ease;
+    }
+
+    .icon-btn svg {
+        width: 14px; height: 14px;
+        stroke: #aaa; fill: none;
+        stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    .icon-btn:hover { background: rgba(122,162,247,.15); border-color: rgba(122,162,247,.3) }
+    .icon-btn:hover svg { stroke: #7aa2f7 }
+
+    .icon-btn.danger:hover { background: rgba(224,92,92,.15); border-color: rgba(224,92,92,.3) }
+    .icon-btn.danger:hover svg { stroke: #e05c5c }
+
+    .account-body {
+        padding: 0 1.25rem 1.25rem;
+        border-top: 1px solid rgba(255,255,255,.06);
+    }
+
+    .upload-btn { margin-top: 1rem }
+
+    .pending-section {
         margin-top: .85rem;
         padding-top: .85rem;
         border-top: 1px solid rgba(255,255,255,.08);
     }
 
-    .preview-title { color: #ddd; margin-bottom: .5rem; font-size: .95rem; }
+    .pending-section .btn.primary {
+        margin-top: .75rem;
+    }
+
+    .uploaded-section {
+        margin-top: .85rem;
+        padding-top: .85rem;
+        border-top: 1px solid rgba(255,255,255,.08);
+    }
+
+    .section-label { color: #ddd; margin-bottom: .5rem; font-size: .95rem }
 
     .file-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: grid;
-        gap: .35rem;
+        list-style: none; padding: 0; margin: 0;
+        display: grid; gap: .35rem;
     }
 
     .file-item {
-        display: flex;
-        align-items: center;
+        display: flex; align-items: center;
         justify-content: space-between;
-        gap: .75rem;
-        padding: .55rem .7rem;
-        border-radius: 12px;
-        background: #151515;
+        gap: .75rem; padding: .55rem .7rem;
+        border-radius: 12px; background: #151515;
         border: 1px solid rgba(255,255,255,.08);
         color: #f3f3f3;
     }
 
-    .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 
     .file-ext {
         font-variant-numeric: tabular-nums;
@@ -273,33 +1073,117 @@
     }
 
     .remove-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        display: flex; align-items: center; justify-content: center;
         background: transparent;
         border: 1px solid rgba(255,255,255,.1);
-        border-radius: 8px;
-        padding: .35rem;
-        cursor: pointer;
+        border-radius: 8px; padding: .35rem; cursor: pointer;
         transition: background .2s ease, border-color .2s ease;
     }
 
-    .remove-btn:hover {
-        background: rgba(224, 92, 92, .15);
-        border-color: rgba(224, 92, 92, .4);
-    }
+    .remove-btn:hover { background: rgba(224,92,92,.15); border-color: rgba(224,92,92,.4) }
 
     .remove-btn svg {
-        width: 14px;
-        height: 14px;
-        stroke: #e05c5c;
-        fill: none;
-        stroke-width: 2;
+        width: 14px; height: 14px;
+        stroke: #e05c5c; fill: none; stroke-width: 2;
     }
 
+    .no-files { margin-top: 1rem }
+
     .status { margin-top: .75rem; color: #ccc }
+    .status.error { color: #eaa; margin-top: .6rem }
+    .invalid-list { margin: .4rem 0 0 1.2rem }
+    .muted { color: #999 }
 
-    .status.error { color: #eaa; margin-top: .6rem; }
+    .overlay {
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,.6);
+        z-index: 200;
+        display: flex; justify-content: center; align-items: flex-start;
+        padding: 2rem;
+        overflow: auto;
+    }
 
-    .invalid-list { margin: .4rem 0 0 1.2rem; }
+    .dialog {
+        width: 100%; max-width: 440px;
+        background: #0f0f0f;
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 18px;
+        padding: 1.5rem;
+        display: flex; flex-direction: column;
+        gap: .75rem;
+    }
+
+    .dialog.wide { max-width: 720px }
+
+    .dialog-title {
+        font-size: 1.1rem; font-weight: 600; color: #fff;
+    }
+
+    .field-label {
+        font-size: .85rem; color: #aaa; margin-top: .25rem;
+    }
+
+    .field-input {
+        width: 100%;
+        padding: .55rem .7rem;
+        border-radius: 10px;
+        background: #1a1a1a;
+        border: 1px solid rgba(255,255,255,.12);
+        color: #f3f3f3;
+        font-size: .95rem;
+        outline: none;
+        transition: border-color .2s ease;
+        box-sizing: border-box;
+    }
+
+    .field-input:focus { border-color: rgba(122,162,247,.5) }
+
+    select.field-input { color-scheme: dark }
+
+    .dialog-actions {
+        display: flex; gap: .5rem; justify-content: flex-end;
+        margin-top: .5rem;
+    }
+
+    .mapping-hint { font-size: .85rem; color: #aaa; margin: 0 }
+
+    .mapping-fields {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: .5rem;
+    }
+
+    .mapping-field {
+        display: flex; flex-direction: column; gap: .25rem;
+    }
+
+    .preview-table-container {
+        width: 100%; overflow-x: auto;
+        margin-top: .5rem;
+        max-height: 220px; overflow-y: auto;
+    }
+
+    .preview-table {
+        width: 100%; border-collapse: collapse;
+        font-size: .85rem; min-width: 400px;
+    }
+
+    .preview-table th, .preview-table td {
+        padding: .45rem .6rem;
+        border-bottom: 1px solid rgba(255,255,255,.06);
+        white-space: nowrap;
+    }
+
+    .preview-table th {
+        text-align: left; color: #bbb;
+        background: #151515;
+        position: sticky; top: 0;
+    }
+
+    .preview-table td { color: #ccc }
+
+    @@media (max-width: 600px) {
+        .mapping-fields { grid-template-columns: 1fr }
+        .account-header { padding: .75rem 1rem }
+    }
 </style>

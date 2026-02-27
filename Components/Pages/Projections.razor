@@ -148,7 +148,8 @@ else
                         </g>
                         @if (isVisible || isPinned)
                         {
-                            @((MarkupString)$"<g><rect x=\"{P(pt.X - 56)}\" y=\"{P(pt.Y - 46)}\" width=\"112\" height=\"36\" rx=\"8\" fill=\"#1a1a1a\" stroke=\"{(isPinned ? "rgba(224,169,62,0.4)" : "rgba(255,255,255,0.15)")}\" stroke-width=\"{(isPinned ? "1.5" : "1")}\" /><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 30)}\" fill=\"#e0a93e\" font-size=\"12\" font-weight=\"600\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Value.ToString("0.00")}</text><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 17)}\" fill=\"#aaa\" font-size=\"10\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Label}</text></g>")
+                            var tp = TooltipPos(pt.X, pt.Y);
+                            @((MarkupString)$"<g><rect x=\"{P(tp.rx)}\" y=\"{P(tp.ry)}\" width=\"112\" height=\"36\" rx=\"8\" fill=\"#1a1a1a\" stroke=\"{(isPinned ? "rgba(224,169,62,0.4)" : "rgba(255,255,255,0.15)")}\" stroke-width=\"{(isPinned ? "1.5" : "1")}\" /><text x=\"{P(tp.tx)}\" y=\"{P(tp.t1y)}\" fill=\"#e0a93e\" font-size=\"12\" font-weight=\"600\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{FormatInMain(info.Value)}</text><text x=\"{P(tp.tx)}\" y=\"{P(tp.t2y)}\" fill=\"#aaa\" font-size=\"10\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Label}</text></g>")
                         }
                     }
                 }
@@ -176,7 +177,8 @@ else
                         </g>
                         @if (isVisible || isPinned)
                         {
-                            @((MarkupString)$"<g><rect x=\"{P(pt.X - 56)}\" y=\"{P(pt.Y - 46)}\" width=\"112\" height=\"36\" rx=\"8\" fill=\"#1a1a1a\" stroke=\"{(isPinned ? "rgba(224,92,92,0.4)" : "rgba(255,255,255,0.15)")}\" stroke-width=\"{(isPinned ? "1.5" : "1")}\" /><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 30)}\" fill=\"#e05c5c\" font-size=\"12\" font-weight=\"600\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Value.ToString("0.00")}</text><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 17)}\" fill=\"#aaa\" font-size=\"10\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Label}</text></g>")
+                            var tp = TooltipPos(pt.X, pt.Y);
+                            @((MarkupString)$"<g><rect x=\"{P(tp.rx)}\" y=\"{P(tp.ry)}\" width=\"112\" height=\"36\" rx=\"8\" fill=\"#1a1a1a\" stroke=\"{(isPinned ? "rgba(224,92,92,0.4)" : "rgba(255,255,255,0.15)")}\" stroke-width=\"{(isPinned ? "1.5" : "1")}\" /><text x=\"{P(tp.tx)}\" y=\"{P(tp.t1y)}\" fill=\"#e05c5c\" font-size=\"12\" font-weight=\"600\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{FormatInMain(info.Value)}</text><text x=\"{P(tp.tx)}\" y=\"{P(tp.t2y)}\" fill=\"#aaa\" font-size=\"10\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Label}</text></g>")
                         }
                     }
                 }
@@ -204,7 +206,8 @@ else
                         </g>
                         @if (isVisible || isPinned)
                         {
-                            @((MarkupString)$"<g><rect x=\"{P(pt.X - 56)}\" y=\"{P(pt.Y - 46)}\" width=\"112\" height=\"36\" rx=\"8\" fill=\"#1a1a1a\" stroke=\"{(isPinned ? "rgba(122,162,247,0.4)" : "rgba(255,255,255,0.15)")}\" stroke-width=\"{(isPinned ? "1.5" : "1")}\" /><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 30)}\" fill=\"#7aa2f7\" font-size=\"12\" font-weight=\"600\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Value.ToString("0.00")}</text><text x=\"{P(pt.X)}\" y=\"{P(pt.Y - 17)}\" fill=\"#aaa\" font-size=\"10\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Label}</text></g>")
+                            var tp = TooltipPos(pt.X, pt.Y);
+                            @((MarkupString)$"<g><rect x=\"{P(tp.rx)}\" y=\"{P(tp.ry)}\" width=\"112\" height=\"36\" rx=\"8\" fill=\"#1a1a1a\" stroke=\"{(isPinned ? "rgba(122,162,247,0.4)" : "rgba(255,255,255,0.15)")}\" stroke-width=\"{(isPinned ? "1.5" : "1")}\" /><text x=\"{P(tp.tx)}\" y=\"{P(tp.t1y)}\" fill=\"#7aa2f7\" font-size=\"12\" font-weight=\"600\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{FormatInMain(info.Value)}</text><text x=\"{P(tp.tx)}\" y=\"{P(tp.t2y)}\" fill=\"#aaa\" font-size=\"10\" text-anchor=\"middle\" font-family=\"ui-monospace,monospace\">{info.Label}</text></g>")
                         }
                     }
                 }
@@ -224,11 +227,11 @@ else
     <div class="summary-grid">
         <div class="summary-card">
             <span class="summary-label">Avg / @IntervalLabel</span>
-            <span class="summary-value negative">@AvgPerPeriod.ToString("0.00")</span>
+            <span class="summary-value negative">@FormatInMain(AvgPerPeriod)</span>
         </div>
         <div class="summary-card">
             <span class="summary-label">Projected total</span>
-            <span class="summary-value negative">@ProjectedTotal.ToString("0.00")</span>
+            <span class="summary-value negative">@FormatInMain(ProjectedTotal)</span>
         </div>
         <div class="summary-card">
             <span class="summary-label">Companies</span>
@@ -272,7 +275,7 @@ else
                     {
                         <span class="cancel-badge">cancels @CancellationDates[c].ToString("MMM dd")</span>
                     }
-                    <span class="company-amount negative">@CompanyTotals[c].ToString("0.00")</span>
+                    <span class="company-amount negative">@FormatInMain(CompanyTotals[c])</span>
                     <button class="profile-btn" @onclick="() => OpenProfile(c)" title="View details">
                         <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" /></svg>
                     </button>
@@ -290,7 +293,7 @@ else
         .ToList();
 
     var profileMonths = profileTxs.Select(t => new { t.Date.Year, t.Date.Month }).Distinct().Count();
-    var profileTotal = profileTxs.Where(t => t.Amount < 0).Sum(t => t.Amount);
+    var profileTotal = profileTxs.Where(t => t.Amount < 0).Sum(t => ConvertToMain(t.Amount, t.Currency));
     var profileAvg = profileMonths > 0 ? profileTotal / profileMonths : 0m;
 
     var hasBehavior = CompanyAnalyses.ContainsKey(ProfileCompany);
@@ -326,11 +329,11 @@ else
                 </div>
                 <div class="stat-card">
                     <span class="stat-label">Total Spent</span>
-                    <span class="stat-value negative">@profileTotal.ToString("0.00")</span>
+                    <span class="stat-value negative">@FormatInMain(profileTotal)</span>
                 </div>
                 <div class="stat-card">
                     <span class="stat-label">Avg / Month</span>
-                    <span class="stat-value negative">@profileAvg.ToString("0.00")</span>
+                    <span class="stat-value negative">@FormatInMain(profileAvg)</span>
                 </div>
             </div>
 
@@ -389,7 +392,7 @@ else
                                             <span class="pill payment">@t.PaymentMethod</span>
                                         }
                                     </td>
-                                    <td class="r mono @(t.Amount < 0 ? "negative" : "positive")">@t.Amount.ToString("0.00")</td>
+                                    <td class="r mono @(t.Amount < 0 ? "negative" : "positive")">@FormatInMain(ConvertToMain(t.Amount, t.Currency))</td>
                                 </tr>
                             }
                         </tbody>
@@ -401,13 +404,42 @@ else
 }
 
 @code {
-    record Tx(DateTime Date, string Company, string Description, string? PaymentMethod, decimal Amount);
+    record Tx(DateTime Date, string Company, string Description, string? PaymentMethod, decimal Amount, string Currency, string AccountId, string AccountName);
 
     readonly List<Tx> AllTransactions = new();
     readonly Dictionary<string, bool> CompanySelected = new();
     readonly Dictionary<string, decimal> CompanyTotals = new();
     readonly List<string> AllCompanies = new();
     string? ErrorMessage;
+
+    string MainCurrency = "EUR";
+    readonly Dictionary<string, decimal> CurrencyRates = new()
+    {
+        ["EUR"] = 1m, ["GBP"] = 1.18m, ["USD"] = 0.92m, ["JPY"] = 0.006m, ["CHF"] = 1.06m
+    };
+
+    static readonly Dictionary<string, string> CurrencySymbolMap = new()
+    {
+        ["GBP"] = "£", ["USD"] = "$", ["EUR"] = "€", ["JPY"] = "¥", ["CHF"] = "CHF "
+    };
+
+    string MainCurrencySymbol => CurrencySymbolMap.GetValueOrDefault(MainCurrency, "");
+
+    decimal ConvertToMain(decimal amount, string fromCurrency)
+    {
+        if (fromCurrency == MainCurrency) return amount;
+        var fromRate = CurrencyRates.GetValueOrDefault(fromCurrency, 1m);
+        var mainRate = CurrencyRates.GetValueOrDefault(MainCurrency, 1m);
+        if (mainRate == 0) mainRate = 1m;
+        return amount * fromRate / mainRate;
+    }
+
+    string FormatInMain(decimal alreadyConverted)
+    {
+        var symbol = MainCurrencySymbol;
+        var abs = Math.Abs(alreadyConverted).ToString("0.00");
+        return alreadyConverted < 0 ? $"-{symbol}{abs}" : $"{symbol}{abs}";
+    }
 
     string? ProfileCompany;
     DateTime CancelDateInput = DateTime.Today.AddMonths(1);
@@ -577,10 +609,38 @@ else
 
     protected override void OnInitialized()
     {
+        LoadCurrencySettings();
         LoadTransactionsFromCsv();
         AnalyzeCompanyBehaviors();
         BuildCompanyList();
         Recalculate();
+    }
+
+    void LoadCurrencySettings()
+    {
+        var settingsPath = Path.Combine(Env.ContentRootPath, "App_Data", "settings.meta");
+        if (!File.Exists(settingsPath)) return;
+
+        foreach (var line in File.ReadAllLines(settingsPath))
+        {
+            var sep = line.IndexOf('=');
+            if (sep < 0) continue;
+            var key = line[..sep].Trim();
+            var val = line[(sep + 1)..].Trim();
+
+            if (key == "maincurrency")
+            {
+                MainCurrency = val;
+            }
+            else if (key.StartsWith("rate_"))
+            {
+                var cur = key[5..];
+                if (decimal.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var rate))
+                {
+                    CurrencyRates[cur] = rate;
+                }
+            }
+        }
     }
 
     void SetInterval(string interval)
@@ -651,13 +711,13 @@ else
         var groups = AllTransactions
             .Where(t => t.Amount < 0)
             .GroupBy(t => t.Company)
-            .OrderByDescending(g => Math.Abs(g.Sum(t => t.Amount)));
+            .OrderByDescending(g => Math.Abs(g.Sum(t => ConvertToMain(t.Amount, t.Currency))));
 
         foreach (var g in groups)
         {
             AllCompanies.Add(g.Key);
             CompanySelected[g.Key] = true;
-            CompanyTotals[g.Key] = g.Sum(t => t.Amount);
+            CompanyTotals[g.Key] = g.Sum(t => ConvertToMain(t.Amount, t.Currency));
         }
     }
 
@@ -687,7 +747,7 @@ else
             var sortedDates = g.Select(t => t.Date.Date).Distinct().OrderBy(d => d).ToList();
             var distinctMonths = g.Select(t => $"{t.Date.Year}-{t.Date.Month:D2}").Distinct().OrderBy(m => m).ToList();
 
-            var amounts = g.Select(t => Math.Round(t.Amount, 2)).ToList();
+            var amounts = g.Select(t => Math.Round(ConvertToMain(t.Amount, t.Currency), 2)).ToList();
             var amountGroups = amounts.GroupBy(a => a).OrderByDescending(x => x.Count()).ToList();
             var typicalAmount = amountGroups.First().Key;
             var mostCommonCount = amountGroups.First().Count();
@@ -859,7 +919,7 @@ else
         var grouped = txs
             .GroupBy(t => BucketKey(t.Date))
             .OrderBy(g => g.Key)
-            .Select(g => (Label: BucketLabel(g.Key), Value: g.Sum(t => t.Amount)))
+            .Select(g => (Label: BucketLabel(g.Key), Value: g.Sum(t => ConvertToMain(t.Amount, t.Currency))))
             .ToList();
 
         if (grouped.Count == 0) return;
@@ -872,7 +932,7 @@ else
         var monthlyBuckets = txs
             .GroupBy(t => t.Date.ToString("yyyy-MM"))
             .OrderBy(g => g.Key)
-            .Select(g => g.Sum(t => t.Amount))
+            .Select(g => g.Sum(t => ConvertToMain(t.Amount, t.Currency)))
             .ToList();
 
         int nm = monthlyBuckets.Count;
@@ -908,7 +968,7 @@ else
             var irregularMonthly = irregularTxs
                 .GroupBy(t => t.Date.ToString("yyyy-MM"))
                 .OrderBy(g => g.Key)
-                .Select(g => g.Sum(t => t.Amount))
+                .Select(g => g.Sum(t => ConvertToMain(t.Amount, t.Currency)))
                 .ToList();
 
             int ni = irregularMonthly.Count;
@@ -1022,8 +1082,15 @@ else
         int totalPoints = allBuckets.Count;
         if (totalPoints == 0) return;
 
+        var preExclValues = PrecomputeExclusionValues(totalPoints);
+
         decimal minVal = allBuckets.Min(b => b.Value);
         decimal maxVal = allBuckets.Max(b => b.Value);
+        if (preExclValues.Count > 0)
+        {
+            minVal = Math.Min(minVal, preExclValues.Min());
+            maxVal = Math.Max(maxVal, preExclValues.Max());
+        }
         decimal range = maxVal - minVal;
         if (range == 0) range = Math.Abs(minVal) > 0 ? Math.Abs(minVal) : 1;
 
@@ -1077,7 +1144,7 @@ else
         {
             double y = MapY(val);
             if (y >= ChartPadTop - 5 && y <= ChartHeight - ChartPadBottom + 5)
-                GridLines.Add((y, FormatAmount(val)));
+                GridLines.Add((y, FormatAmountWithSymbol(val)));
         }
 
         int labelStep = Math.Max(1, totalPoints / 8);
@@ -1103,7 +1170,7 @@ else
 
             var selectedByBucket = allSelectedTxs
                 .GroupBy(t => BucketKey(t.Date))
-                .ToDictionary(g => g.Key, g => g.Sum(t => t.Amount));
+                .ToDictionary(g => g.Key, g => g.Sum(t => ConvertToMain(t.Amount, t.Currency)));
 
             var exclHistorical = historicalBucketKeys
                 .Select(key => selectedByBucket.TryGetValue(key, out var val) ? val : 0m)
@@ -1112,7 +1179,7 @@ else
             var exclMonthly = allSelectedTxs
                 .GroupBy(t => t.Date.ToString("yyyy-MM"))
                 .OrderBy(g => g.Key)
-                .Select(g => g.Sum(t => t.Amount))
+                .Select(g => g.Sum(t => ConvertToMain(t.Amount, t.Currency)))
                 .ToList();
 
             int enm = exclMonthly.Count;
@@ -1134,6 +1201,263 @@ else
             }
 
             var exclProjected = new List<decimal>();
+
+            if (SelectedMode == "smart")
+            {
+                var exclIrregularTxs = allSelectedTxs.Where(t =>
+                {
+                    if (!CompanyAnalyses.ContainsKey(t.Company)) return true;
+                    var b = CompanyAnalyses[t.Company].Behavior;
+                    return b == CompanyBehavior.Irregular;
+                }).ToList();
+
+                var exclIrregularMonthly = exclIrregularTxs
+                    .GroupBy(t => t.Date.ToString("yyyy-MM"))
+                    .OrderBy(g => g.Key)
+                    .Select(g => g.Sum(t => ConvertToMain(t.Amount, t.Currency)))
+                    .ToList();
+
+                int eni = exclIrregularMonthly.Count;
+                double exIrregSlope = 0, exIrregIntercept = 0;
+                if (eni > 1)
+                {
+                    double sX2 = 0, sY2 = 0, sXY2 = 0, sXX2 = 0;
+                    for (int i = 0; i < eni; i++)
+                    {
+                        double x = i; double y = (double)exclIrregularMonthly[i];
+                        sX2 += x; sY2 += y; sXY2 += x * y; sXX2 += x * x;
+                    }
+                    exIrregSlope = (eni * sXY2 - sX2 * sY2) / (eni * sXX2 - sX2 * sX2);
+                    exIrregIntercept = (sY2 - exIrregSlope * sX2) / eni;
+                }
+                else if (eni == 1)
+                {
+                    exIrregIntercept = (double)exclIrregularMonthly[0];
+                }
+
+                var lastDate2 = txs.Max(t => t.Date);
+                for (int i = 1; i <= PeriodsAhead; i++)
+                {
+                    var futureDate = SelectedInterval switch
+                    {
+                        "week" => lastDate2.AddDays(7 * i),
+                        "year" => lastDate2.AddYears(i),
+                        _ => lastDate2.AddMonths(i)
+                    };
+
+                    decimal pv;
+                    if (SelectedInterval == "year")
+                    {
+                        decimal yt = 0;
+                        for (int m = 0; m < 12; m++)
+                        {
+                            var monthDate = futureDate.AddMonths(m - 11);
+                            decimal subMonth = GetSubscriptionProjectionMonthly(monthDate, filterBySelection: true);
+                            int monthIdx = eni + ((i - 1) * 12) + m;
+                            decimal irregMonth = (decimal)(exIrregIntercept + exIrregSlope * monthIdx);
+                            if (irregMonth > 0) irregMonth = 0;
+                            yt += subMonth + irregMonth;
+                        }
+                        pv = yt;
+                    }
+                    else if (SelectedInterval == "week")
+                    {
+                        decimal subWeek = GetSubscriptionProjectionMonthly(futureDate, filterBySelection: true);
+                        double monthsFwd = i / 4.33;
+                        int monthIdx = eni + (int)Math.Floor(monthsFwd);
+                        decimal irregMonth = (decimal)(exIrregIntercept + exIrregSlope * monthIdx);
+                        if (irregMonth > 0) irregMonth = 0;
+                        pv = (subWeek + irregMonth) / 4.33m;
+                    }
+                    else
+                    {
+                        decimal subMonth = GetSubscriptionProjectionMonthly(futureDate, filterBySelection: true);
+                        int monthIdx = eni + i - 1;
+                        decimal irregMonth = (decimal)(exIrregIntercept + exIrregSlope * monthIdx);
+                        if (irregMonth > 0) irregMonth = 0;
+                        pv = subMonth + irregMonth;
+                    }
+                    if (pv > 0) pv = 0;
+                    exclProjected.Add(pv);
+                }
+            }
+            else
+            {
+                for (int i = 1; i <= PeriodsAhead; i++)
+                {
+                    decimal pv;
+                    if (SelectedInterval == "year")
+                    {
+                        decimal yt = 0;
+                        for (int m = 0; m < 12; m++)
+                        {
+                            int mi = enm + ((i - 1) * 12) + m;
+                            yt += (decimal)(exIntercept + exSlope * mi);
+                        }
+                        pv = yt;
+                    }
+                    else if (SelectedInterval == "week")
+                    {
+                        int mi = enm + (int)Math.Floor(i / 4.33);
+                        pv = (decimal)(exIntercept + exSlope * mi) / 4.33m;
+                    }
+                    else
+                    {
+                        int mi = enm + i - 1;
+                        pv = (decimal)(exIntercept + exSlope * mi);
+                    }
+                    if (pv > 0) pv = 0;
+                    exclProjected.Add(pv);
+                }
+            }
+
+            for (int i = 0; i < exclHistorical.Count && i < HistoricalBuckets.Count; i++)
+                ExclusionBuckets.Add((HistoricalBuckets[i].Label, exclHistorical[i]));
+            for (int i = 0; i < exclProjected.Count && i < ProjectedBuckets.Count; i++)
+                ExclusionBuckets.Add((ProjectedBuckets[i].Label, exclProjected[i]));
+
+            var exclAll = exclHistorical.Concat(exclProjected).ToList();
+
+            for (int i = 0; i < exclAll.Count && i < totalPoints; i++)
+                ExclusionPoints.Add((MapX(i), MapY(exclAll[i])));
+
+            ExclusionLinePath = BuildLinePath(ExclusionPoints);
+
+            double exBaseY = MapY(0) < ChartPadTop ? ChartHeight - ChartPadBottom :
+                             MapY(0) > ChartHeight - ChartPadBottom ? ChartHeight - ChartPadBottom :
+                             MapY(0);
+            ExclusionAreaPath = BuildAreaPath(ExclusionPoints, exBaseY);
+        }
+    }
+
+    List<decimal> PrecomputeExclusionValues(int totalPoints)
+    {
+        bool hasDeselected = CompanySelected.Any(kvp => !kvp.Value);
+        if (!hasDeselected || HistoricalBuckets.Count == 0) return new();
+
+        var txs = AllTransactions.Where(t => t.Amount < 0).ToList();
+        var allSelectedTxs = AllTransactions.Where(t => t.Amount < 0 && CompanySelected.ContainsKey(t.Company) && CompanySelected[t.Company]).ToList();
+
+        var historicalBucketKeys = txs
+            .GroupBy(t => BucketKey(t.Date))
+            .OrderBy(g => g.Key)
+            .Select(g => g.Key)
+            .ToList();
+
+        var selectedByBucket = allSelectedTxs
+            .GroupBy(t => BucketKey(t.Date))
+            .ToDictionary(g => g.Key, g => g.Sum(t => ConvertToMain(t.Amount, t.Currency)));
+
+        var exclHistorical = historicalBucketKeys
+            .Select(key => selectedByBucket.TryGetValue(key, out var val) ? val : 0m)
+            .ToList();
+
+        var exclMonthly = allSelectedTxs
+            .GroupBy(t => t.Date.ToString("yyyy-MM"))
+            .OrderBy(g => g.Key)
+            .Select(g => g.Sum(t => ConvertToMain(t.Amount, t.Currency)))
+            .ToList();
+
+        int enm = exclMonthly.Count;
+        double exSlope = 0, exIntercept = 0;
+        if (enm > 1)
+        {
+            double sX = 0, sY = 0, sXY = 0, sXX = 0;
+            for (int i = 0; i < enm; i++)
+            {
+                double x = i; double y = (double)exclMonthly[i];
+                sX += x; sY += y; sXY += x * y; sXX += x * x;
+            }
+            exSlope = (enm * sXY - sX * sY) / (enm * sXX - sX * sX);
+            exIntercept = (sY - exSlope * sX) / enm;
+        }
+        else if (enm == 1)
+        {
+            exIntercept = (double)exclMonthly[0];
+        }
+
+        var exclProjected = new List<decimal>();
+        var lastDate = txs.Max(t => t.Date);
+
+        if (SelectedMode == "smart")
+        {
+            var exclIrregularTxs = allSelectedTxs.Where(t =>
+            {
+                if (!CompanyAnalyses.ContainsKey(t.Company)) return true;
+                var b = CompanyAnalyses[t.Company].Behavior;
+                return b == CompanyBehavior.Irregular;
+            }).ToList();
+
+            var exclIrregularMonthly = exclIrregularTxs
+                .GroupBy(t => t.Date.ToString("yyyy-MM"))
+                .OrderBy(g => g.Key)
+                .Select(g => g.Sum(t => ConvertToMain(t.Amount, t.Currency)))
+                .ToList();
+
+            int eni = exclIrregularMonthly.Count;
+            double exIrregSlope = 0, exIrregIntercept = 0;
+            if (eni > 1)
+            {
+                double sX2 = 0, sY2 = 0, sXY2 = 0, sXX2 = 0;
+                for (int i = 0; i < eni; i++)
+                {
+                    double x = i; double y = (double)exclIrregularMonthly[i];
+                    sX2 += x; sY2 += y; sXY2 += x * y; sXX2 += x * x;
+                }
+                exIrregSlope = (eni * sXY2 - sX2 * sY2) / (eni * sXX2 - sX2 * sX2);
+                exIrregIntercept = (sY2 - exIrregSlope * sX2) / eni;
+            }
+            else if (eni == 1)
+            {
+                exIrregIntercept = (double)exclIrregularMonthly[0];
+            }
+
+            for (int i = 1; i <= PeriodsAhead; i++)
+            {
+                var futureDate = SelectedInterval switch
+                {
+                    "week" => lastDate.AddDays(7 * i),
+                    "year" => lastDate.AddYears(i),
+                    _ => lastDate.AddMonths(i)
+                };
+                decimal pv;
+                if (SelectedInterval == "year")
+                {
+                    decimal yt = 0;
+                    for (int m = 0; m < 12; m++)
+                    {
+                        var monthDate = futureDate.AddMonths(m - 11);
+                        decimal subMonth = GetSubscriptionProjectionMonthly(monthDate, filterBySelection: true);
+                        int monthIdx = eni + ((i - 1) * 12) + m;
+                        decimal irregMonth = (decimal)(exIrregIntercept + exIrregSlope * monthIdx);
+                        if (irregMonth > 0) irregMonth = 0;
+                        yt += subMonth + irregMonth;
+                    }
+                    pv = yt;
+                }
+                else if (SelectedInterval == "week")
+                {
+                    decimal subWeek = GetSubscriptionProjectionMonthly(futureDate, filterBySelection: true);
+                    double monthsFwd = i / 4.33;
+                    int monthIdx = eni + (int)Math.Floor(monthsFwd);
+                    decimal irregMonth = (decimal)(exIrregIntercept + exIrregSlope * monthIdx);
+                    if (irregMonth > 0) irregMonth = 0;
+                    pv = (subWeek + irregMonth) / 4.33m;
+                }
+                else
+                {
+                    decimal subMonth = GetSubscriptionProjectionMonthly(futureDate, filterBySelection: true);
+                    int monthIdx = eni + i - 1;
+                    decimal irregMonth = (decimal)(exIrregIntercept + exIrregSlope * monthIdx);
+                    if (irregMonth > 0) irregMonth = 0;
+                    pv = subMonth + irregMonth;
+                }
+                if (pv > 0) pv = 0;
+                exclProjected.Add(pv);
+            }
+        }
+        else
+        {
             for (int i = 1; i <= PeriodsAhead; i++)
             {
                 decimal pv;
@@ -1160,24 +1484,9 @@ else
                 if (pv > 0) pv = 0;
                 exclProjected.Add(pv);
             }
-
-            for (int i = 0; i < exclHistorical.Count && i < HistoricalBuckets.Count; i++)
-                ExclusionBuckets.Add((HistoricalBuckets[i].Label, exclHistorical[i]));
-            for (int i = 0; i < exclProjected.Count && i < ProjectedBuckets.Count; i++)
-                ExclusionBuckets.Add((ProjectedBuckets[i].Label, exclProjected[i]));
-
-            var exclAll = exclHistorical.Concat(exclProjected).ToList();
-
-            for (int i = 0; i < exclAll.Count && i < totalPoints; i++)
-                ExclusionPoints.Add((MapX(i), MapY(exclAll[i])));
-
-            ExclusionLinePath = BuildLinePath(ExclusionPoints);
-
-            double exBaseY = MapY(0) < ChartPadTop ? ChartHeight - ChartPadBottom :
-                             MapY(0) > ChartHeight - ChartPadBottom ? ChartHeight - ChartPadBottom :
-                             MapY(0);
-            ExclusionAreaPath = BuildAreaPath(ExclusionPoints, exBaseY);
         }
+
+        return exclHistorical.Concat(exclProjected).ToList();
     }
 
     string BucketKey(DateTime d) => SelectedInterval switch
@@ -1229,6 +1538,16 @@ else
         return val.ToString("0");
     }
 
+    string FormatAmountWithSymbol(decimal val)
+    {
+        var symbol = MainCurrencySymbol;
+        var abs = Math.Abs(val);
+        var sign = val < 0 ? "-" : "";
+        if (abs >= 1000)
+            return $"{sign}{symbol}{abs / 1000:0.#}k";
+        return $"{sign}{symbol}{abs:0}";
+    }
+
     static string BuildLinePath(List<(double X, double Y)> points)
     {
         if (points.Count == 0) return "";
@@ -1254,32 +1573,108 @@ else
 
     void RenderChart() { }
 
+    (double rx, double ry, double tx, double t1y, double t2y) TooltipPos(double px, double py)
+    {
+        const double w = 112, h = 36, gap = 10;
+        double rx = px - w / 2;
+        double ry = py - h - gap;
+        double tx = px;
+        if (ry < 2) ry = py + gap;
+        if (ry + h > ChartHeight - 2) ry = ChartHeight - h - 2;
+        if (rx < 2) { tx += 2 - rx; rx = 2; }
+        else if (rx + w > ChartWidth - 2) { tx -= rx + w - ChartWidth + 2; rx = ChartWidth - w - 2; }
+        return (rx, ry, tx, ry + 16, ry + 29);
+    }
+
+    record AccountMeta(string Id, string Name, string Currency, string DateFormat, bool HasCustomMapping, int DateIndex, int AmountIndex, int MemoIndex, int CategoryIndex);
+
+    List<AccountMeta> LoadAccountMetas()
+    {
+        var result = new List<AccountMeta>();
+        var baseDir = Path.Combine(Env.ContentRootPath, "App_Data", "accounts");
+        if (!Directory.Exists(baseDir)) return result;
+
+        foreach (var dir in Directory.GetDirectories(baseDir))
+        {
+            var metaPath = Path.Combine(dir, "account.meta");
+            if (!File.Exists(metaPath)) continue;
+
+            var id = Path.GetFileName(dir);
+            string name = id, currency = "GBP", dateFormat = "dd/MM/yyyy";
+            bool hasMapping = false;
+            int di = -1, ai = -1, mi = -1, ci = -1;
+
+            foreach (var line in File.ReadAllLines(metaPath))
+            {
+                var sep = line.IndexOf('=');
+                if (sep < 0) continue;
+                var key = line[..sep].Trim();
+                var val = line[(sep + 1)..].Trim();
+
+                switch (key)
+                {
+                    case "name": name = val; break;
+                    case "currency": currency = val; break;
+                    case "dateformat": dateFormat = val; break;
+                    case "hasmapping": hasMapping = val == "true"; break;
+                    case "dateindex": int.TryParse(val, out di); break;
+                    case "amountindex": int.TryParse(val, out ai); break;
+                    case "memoindex": int.TryParse(val, out mi); break;
+                    case "categoryindex": int.TryParse(val, out ci); break;
+                }
+            }
+
+            result.Add(new AccountMeta(id, name, currency, dateFormat, hasMapping, di, ai, mi, ci));
+        }
+
+        return result;
+    }
 
     void LoadTransactionsFromCsv()
     {
         AllTransactions.Clear();
         ErrorMessage = null;
 
-        var dir = Path.Combine(Env.ContentRootPath, "App_Data", "uploads");
-        if (!Directory.Exists(dir)) return;
+        var accounts = LoadAccountMetas();
 
-        foreach (var filePath in Directory.GetFiles(dir, "*.csv"))
+        foreach (var acct in accounts)
         {
-            try { ParseCsvFile(filePath); }
-            catch (Exception ex)
+            var dir = Path.Combine(Env.ContentRootPath, "App_Data", "accounts", acct.Id);
+            if (!Directory.Exists(dir)) continue;
+
+            foreach (var filePath in Directory.GetFiles(dir, "*.csv"))
             {
-                ErrorMessage = $"Error reading {Path.GetFileName(filePath)}: {ex.Message}";
+                try { ParseCsvFile(filePath, acct); }
+                catch (Exception ex)
+                {
+                    ErrorMessage = $"Error reading {Path.GetFileName(filePath)}: {ex.Message}";
+                }
             }
         }
     }
 
-    void ParseCsvFile(string filePath)
+    void ParseCsvFile(string filePath, AccountMeta acct)
     {
         var lines = File.ReadAllLines(filePath);
         if (lines.Length < 2) return;
 
         var headerFields = ParseCsvLine(lines[0]);
-        var columnMap = DetectColumns(headerFields);
+        ColumnMap columnMap;
+
+        if (acct.HasCustomMapping && (acct.DateIndex >= 0 || acct.AmountIndex >= 0))
+        {
+            var autoMap = DetectColumns(headerFields);
+            columnMap = new ColumnMap(
+                acct.DateIndex >= 0 ? acct.DateIndex : autoMap.DateIndex,
+                acct.AmountIndex >= 0 ? acct.AmountIndex : autoMap.AmountIndex,
+                acct.MemoIndex >= 0 ? acct.MemoIndex : autoMap.MemoIndex,
+                acct.CategoryIndex >= 0 ? acct.CategoryIndex : autoMap.SubcategoryIndex
+            );
+        }
+        else
+        {
+            columnMap = DetectColumns(headerFields);
+        }
 
         if (columnMap.DateIndex < 0 || columnMap.AmountIndex < 0)
         {
@@ -1290,7 +1685,7 @@ else
         for (var i = 1; i < lines.Length; i++)
         {
             if (string.IsNullOrWhiteSpace(lines[i])) continue;
-            var tx = ParseLine(lines[i], columnMap);
+            var tx = ParseLine(lines[i], columnMap, acct);
             if (tx is not null) AllTransactions.Add(tx);
         }
     }
@@ -1311,16 +1706,16 @@ else
         return new ColumnMap(dateIdx, amountIdx, memoIdx, subcategoryIdx);
     }
 
-    Tx? ParseLine(string line, ColumnMap map)
+    Tx? ParseLine(string line, ColumnMap map, AccountMeta acct)
     {
         var fields = ParseCsvLine(line);
         var maxRequired = Math.Max(map.DateIndex, Math.Max(map.AmountIndex, Math.Max(map.MemoIndex, map.SubcategoryIndex)));
         if (fields.Count <= maxRequired) return null;
 
         var dateStr = fields[map.DateIndex].Trim();
-        if (!TryParseDate(dateStr, out var date)) return null;
+        if (!TryParseDate(dateStr, acct.DateFormat, out var date)) return null;
 
-        var amountStr = fields[map.AmountIndex].Trim().Replace("$", "").Replace("Â£", "").Replace("â‚¬", "").Replace(",", "");
+        var amountStr = fields[map.AmountIndex].Trim().Replace("$", "").Replace("£", "").Replace("€", "").Replace("¥", "").Replace(",", "");
         if (!decimal.TryParse(amountStr, out var amount)) return null;
 
         var memo = map.MemoIndex >= 0 && map.MemoIndex < fields.Count ? fields[map.MemoIndex].Trim() : "";
@@ -1331,7 +1726,7 @@ else
             var (subCompany, _) = ExtractCompanyAndPayment(subcategory);
             if (subCompany != "Unknown") company = subCompany;
         }
-        return new Tx(date, company, memo, paymentMethod, amount);
+        return new Tx(date, company, memo, paymentMethod, amount, acct.Currency, acct.Id, acct.Name);
     }
 
     static (string Company, string? PaymentMethod) ExtractCompanyAndPayment(string memo)
@@ -1379,11 +1774,14 @@ else
         string.IsNullOrWhiteSpace(name) ? name :
         System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(name.ToLowerInvariant());
 
-    static bool TryParseDate(string dateStr, out DateTime date)
+    static bool TryParseDate(string dateStr, string preferredFormat, out DateTime date)
     {
-        string[] formats = ["dd/MM/yyyy","MM/dd/yyyy","yyyy-MM-dd","dd-MM-yyyy","MM-dd-yyyy",
+        if (DateTime.TryParseExact(dateStr, preferredFormat, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out date)) return true;
+
+        string[] fallbacks = ["dd/MM/yyyy","MM/dd/yyyy","yyyy-MM-dd","dd-MM-yyyy","MM-dd-yyyy",
             "d/M/yyyy","M/d/yyyy","dd MMM yyyy","MMM dd, yyyy"];
-        if (DateTime.TryParseExact(dateStr, formats, System.Globalization.CultureInfo.InvariantCulture,
+        if (DateTime.TryParseExact(dateStr, fallbacks, System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.None, out date)) return true;
         return DateTime.TryParse(dateStr, out date);
     }
