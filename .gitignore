@@ -25,3 +25,4 @@ node_modules/
 wwwroot/lib/
 
 App_Data/uploads/
+/App_Data
