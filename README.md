@@ -47,3 +47,4 @@ Interval can be set to weeks, months, or years with configurable periods ahead. 
 ## Potential Future Work
 
 - Planned spendings - add planned/scheduled purchases(e.g. user wants to buy something) to future estimations
+- Add company logo images
