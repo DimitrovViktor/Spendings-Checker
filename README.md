@@ -40,7 +40,12 @@ Predictions are displayed based on info from CSV files. Projections show how muc
 
 Interval can be set to weeks, months, or years with configurable periods ahead. Companies can be toggled on/off and the chart shows a "without deselected" line to compare. Active subscriptions and recurring returners support cancellation date scheduling which excludes them from projections after that date.
 
-## TO-DO:
+## AI generated content used
+
+- Company names list
+- Test transaction CSV file (shown in screenshots above)
+
+## TO-DO
 
 - Subscription only projections
   
