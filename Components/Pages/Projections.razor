@@ -460,7 +460,7 @@ else
     string ModeHint => SelectedMode switch
     {
         "smart" => "Subs + irregular trend, excludes cancelled & one-offs",
-        "subonly" => "Coming soon — subscriptions only",
+        "subonly" => "Only active subscriptions & recurring returners",
         _ => "Trend line across all transactions"
     };
 
@@ -914,6 +914,8 @@ else
         PinnedExclusionIndex = null;
 
         var txs = AllTransactions.Where(t => t.Amount < 0).ToList();
+        if (SelectedMode == "subonly")
+            txs = txs.Where(t => IsSubscriptionCompany(t.Company)).ToList();
         if (txs.Count == 0) return;
 
         var grouped = txs
@@ -1031,6 +1033,41 @@ else
                     decimal irregMonth = (decimal)(irregIntercept + irregSlope * monthIdx);
                     if (irregMonth > 0) irregMonth = 0;
                     projectedValue = subMonth + irregMonth;
+                }
+
+                if (projectedValue > 0) projectedValue = 0;
+                ProjectedBuckets.Add((BucketLabel(BucketKey(futureDate)), projectedValue));
+            }
+        }
+        else if (SelectedMode == "subonly")
+        {
+            for (int i = 1; i <= PeriodsAhead; i++)
+            {
+                var futureDate = SelectedInterval switch
+                {
+                    "week" => lastDate.AddDays(7 * i),
+                    "year" => lastDate.AddYears(i),
+                    _ => lastDate.AddMonths(i)
+                };
+
+                decimal projectedValue;
+                if (SelectedInterval == "year")
+                {
+                    decimal yearTotal = 0;
+                    for (int m = 0; m < 12; m++)
+                    {
+                        var monthDate = futureDate.AddMonths(m - 11);
+                        yearTotal += GetSubscriptionProjectionMonthly(monthDate, filterBySelection: false);
+                    }
+                    projectedValue = yearTotal;
+                }
+                else if (SelectedInterval == "week")
+                {
+                    projectedValue = GetSubscriptionProjectionMonthly(futureDate, filterBySelection: false) / 4.33m;
+                }
+                else
+                {
+                    projectedValue = GetSubscriptionProjectionMonthly(futureDate, filterBySelection: false);
                 }
 
                 if (projectedValue > 0) projectedValue = 0;
@@ -1161,6 +1198,8 @@ else
         if (hasDeselected && HistoricalBuckets.Count > 0)
         {
             var allSelectedTxs = AllTransactions.Where(t => t.Amount < 0 && CompanySelected.ContainsKey(t.Company) && CompanySelected[t.Company]).ToList();
+            if (SelectedMode == "subonly")
+                allSelectedTxs = allSelectedTxs.Where(t => IsSubscriptionCompany(t.Company)).ToList();
 
             var historicalBucketKeys = txs
                 .GroupBy(t => BucketKey(t.Date))
@@ -1281,6 +1320,40 @@ else
                     exclProjected.Add(pv);
                 }
             }
+            else if (SelectedMode == "subonly")
+            {
+                var lastDate2 = txs.Count > 0 ? txs.Max(t => t.Date) : lastDate;
+                for (int i = 1; i <= PeriodsAhead; i++)
+                {
+                    var futureDate = SelectedInterval switch
+                    {
+                        "week" => lastDate2.AddDays(7 * i),
+                        "year" => lastDate2.AddYears(i),
+                        _ => lastDate2.AddMonths(i)
+                    };
+                    decimal pv;
+                    if (SelectedInterval == "year")
+                    {
+                        decimal yt = 0;
+                        for (int m = 0; m < 12; m++)
+                        {
+                            var monthDate = futureDate.AddMonths(m - 11);
+                            yt += GetSubscriptionProjectionMonthly(monthDate, filterBySelection: true);
+                        }
+                        pv = yt;
+                    }
+                    else if (SelectedInterval == "week")
+                    {
+                        pv = GetSubscriptionProjectionMonthly(futureDate, filterBySelection: true) / 4.33m;
+                    }
+                    else
+                    {
+                        pv = GetSubscriptionProjectionMonthly(futureDate, filterBySelection: true);
+                    }
+                    if (pv > 0) pv = 0;
+                    exclProjected.Add(pv);
+                }
+            }
             else
             {
                 for (int i = 1; i <= PeriodsAhead; i++)
@@ -1336,7 +1409,11 @@ else
         if (!hasDeselected || HistoricalBuckets.Count == 0) return new();
 
         var txs = AllTransactions.Where(t => t.Amount < 0).ToList();
+        if (SelectedMode == "subonly")
+            txs = txs.Where(t => IsSubscriptionCompany(t.Company)).ToList();
         var allSelectedTxs = AllTransactions.Where(t => t.Amount < 0 && CompanySelected.ContainsKey(t.Company) && CompanySelected[t.Company]).ToList();
+        if (SelectedMode == "subonly")
+            allSelectedTxs = allSelectedTxs.Where(t => IsSubscriptionCompany(t.Company)).ToList();
 
         var historicalBucketKeys = txs
             .GroupBy(t => BucketKey(t.Date))
@@ -1451,6 +1528,39 @@ else
                     decimal irregMonth = (decimal)(exIrregIntercept + exIrregSlope * monthIdx);
                     if (irregMonth > 0) irregMonth = 0;
                     pv = subMonth + irregMonth;
+                }
+                if (pv > 0) pv = 0;
+                exclProjected.Add(pv);
+            }
+        }
+        else if (SelectedMode == "subonly")
+        {
+            for (int i = 1; i <= PeriodsAhead; i++)
+            {
+                var futureDate = SelectedInterval switch
+                {
+                    "week" => lastDate.AddDays(7 * i),
+                    "year" => lastDate.AddYears(i),
+                    _ => lastDate.AddMonths(i)
+                };
+                decimal pv;
+                if (SelectedInterval == "year")
+                {
+                    decimal yt = 0;
+                    for (int m = 0; m < 12; m++)
+                    {
+                        var monthDate = futureDate.AddMonths(m - 11);
+                        yt += GetSubscriptionProjectionMonthly(monthDate, filterBySelection: true);
+                    }
+                    pv = yt;
+                }
+                else if (SelectedInterval == "week")
+                {
+                    pv = GetSubscriptionProjectionMonthly(futureDate, filterBySelection: true) / 4.33m;
+                }
+                else
+                {
+                    pv = GetSubscriptionProjectionMonthly(futureDate, filterBySelection: true);
                 }
                 if (pv > 0) pv = 0;
                 exclProjected.Add(pv);
@@ -1954,10 +2064,6 @@ else
         border-radius: 16px;
         padding: 1rem;
         transition: transform .2s ease;
-    }
-
-    .card:hover {
-        transform: translateY(-1px)
     }
 
     .card.empty {
